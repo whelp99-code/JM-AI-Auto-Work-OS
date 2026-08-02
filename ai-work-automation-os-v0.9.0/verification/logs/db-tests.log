@@ -1,0 +1,56 @@
+TAP version 13
+# (node:24184) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: v0.8.0 database is atomically rebuilt and preserves core records
+ok 1 - v0.8.0 database is atomically rebuilt and preserves core records
+  ---
+  duration_ms: 111.556647
+  type: 'test'
+  ...
+# Subtest: team and manager relations are restored independently of legacy row order
+ok 2 - team and manager relations are restored independently of legacy row order
+  ---
+  duration_ms: 139.936061
+  type: 'test'
+  ...
+# Subtest: dry-run and unsupported-schema failures never modify the source database
+ok 3 - dry-run and unsupported-schema failures never modify the source database
+  ---
+  duration_ms: 103.930966
+  type: 'test'
+  ...
+# Subtest: already rebuilt database is a safe no-op
+ok 4 - already rebuilt database is a safe no-op
+  ---
+  duration_ms: 148.407522
+  type: 'test'
+  ...
+# Subtest: explicit rollback restores the v0.8.0 sidecar and keeps a v0.9.0 safety copy
+ok 5 - explicit rollback restores the v0.8.0 sidecar and keeps a v0.9.0 safety copy
+  ---
+  duration_ms: 152.897898
+  type: 'test'
+  ...
+# (node:24185) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: v0.9.0 canonical schema has exactly 18 physical tables
+ok 6 - v0.9.0 canonical schema has exactly 18 physical tables
+  ---
+  duration_ms: 3.282268
+  type: 'test'
+  ...
+# Subtest: core tables cover organization, mission, workflow, council, quality, delivery and ops
+ok 7 - core tables cover organization, mission, workflow, council, quality, delivery and ops
+  ---
+  duration_ms: 0.995848
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 719.296546

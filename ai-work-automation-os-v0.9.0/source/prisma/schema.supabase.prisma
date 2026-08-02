@@ -1,0 +1,579 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  schemaVersion    String   @default("0.9.0") @map("schema_version")
+  mode             String   @default("local")
+  ownerPrincipalId String   @default("local:owner") @map("owner_principal_id")
+  settingsJson     String   @default("{}") @map("settings_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  orgUnits OrgUnit[]
+  roles    Role[]
+  agents   Agent[]
+  missions Mission[]
+  events   EventLog[]
+  files    FileAsset[]
+
+  @@map("workspace")
+}
+
+model OrgUnit {
+  id             String   @id @default(cuid())
+  workspaceId    String   @map("workspace_id")
+  missionRunId   String?  @map("mission_run_id")
+  parentId       String?  @map("parent_id")
+  unitType       String   @map("unit_type")
+  key            String
+  name           String
+  objective      String   @default("")
+  status         String   @default("active")
+  budgetMicros   BigInt   @default(0) @map("budget_micros")
+  spentMicros    BigInt   @default(0) @map("spent_micros")
+  settingsJson   String   @default("{}") @map("settings_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  missionRun  MissionRun? @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  parent      OrgUnit?    @relation("OrgUnitTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    OrgUnit[]   @relation("OrgUnitTree")
+  roles       Role[]
+  agents      Agent[]
+  workItems   WorkItem[]
+  steps       WorkflowStep[]
+  approvals   Approval[]
+
+  @@unique([workspaceId, missionRunId, key])
+  @@index([workspaceId, unitType, status])
+  @@index([missionRunId, status])
+  @@index([parentId])
+  @@map("org_unit")
+}
+
+model Role {
+  id                   String   @id @default(cuid())
+  workspaceId          String   @map("workspace_id")
+  orgUnitId            String?  @map("org_unit_id")
+  key                  String
+  title                String
+  category             String
+  responsibilitiesJson String   @default("[]") @map("responsibilities_json")
+  capabilitiesJson     String   @default("[]") @map("capabilities_json")
+  permissionsJson      String   @default("[]") @map("permissions_json")
+  toolPolicyJson       String   @default("{}") @map("tool_policy_json")
+  modelClass           String   @default("balanced") @map("model_class")
+  isLead               Boolean  @default(false) @map("is_lead")
+  isVerifier           Boolean  @default(false) @map("is_verifier")
+  status               String   @default("active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  orgUnit   OrgUnit?   @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  agents    Agent[]
+  messages  CouncilMessage[]
+
+  @@unique([workspaceId, orgUnitId, key])
+  @@index([workspaceId, category, status])
+  @@index([orgUnitId, status])
+  @@map("role")
+}
+
+model Agent {
+  id               String   @id @default(cuid())
+  workspaceId      String   @map("workspace_id")
+  missionRunId     String?  @map("mission_run_id")
+  orgUnitId        String?  @map("org_unit_id")
+  roleId           String   @map("role_id")
+  managerAgentId   String?  @map("manager_agent_id")
+  name             String
+  provider         String?
+  model            String?
+  status           String   @default("active")
+  capabilitiesJson String   @default("[]") @map("capabilities_json")
+  permissionsJson  String   @default("[]") @map("permissions_json")
+  contextJson      String   @default("{}") @map("context_json")
+  budgetMicros     BigInt   @default(0) @map("budget_micros")
+  spentMicros      BigInt   @default(0) @map("spent_micros")
+  temporary        Boolean  @default(true)
+  activatedAt      DateTime? @map("activated_at")
+  retiredAt        DateTime? @map("retired_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  missionRun    MissionRun? @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  orgUnit       OrgUnit?    @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  role          Role        @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  manager       Agent?      @relation("AgentTree", fields: [managerAgentId], references: [id], onDelete: SetNull)
+  directReports Agent[]     @relation("AgentTree")
+  workItems     WorkItem[]
+  steps         WorkflowStep[]
+  reviews       Review[]    @relation("ReviewAgent")
+  messages      CouncilMessage[]
+  artifacts     Artifact[]
+  effects       ExternalEffect[]
+  approvals     Approval[]
+
+  @@unique([missionRunId, roleId, name])
+  @@index([workspaceId, status])
+  @@index([missionRunId, status])
+  @@index([orgUnitId, status])
+  @@index([managerAgentId, status])
+  @@map("agent")
+}
+
+model Mission {
+  id               String   @id @default(cuid())
+  workspaceId      String   @map("workspace_id")
+  title            String
+  objective        String
+  missionType      String   @default("general") @map("mission_type")
+  status           String   @default("draft")
+  priority         String   @default("normal")
+  riskLevel        String   @default("GREEN") @map("risk_level")
+  approvalMode     String   @default("delegated") @map("approval_mode")
+  budgetMicros     BigInt   @default(1000000) @map("budget_micros")
+  spentMicros      BigInt   @default(0) @map("spent_micros")
+  successJson      String   @default("[]") @map("success_json")
+  constraintsJson  String   @default("[]") @map("constraints_json")
+  inputJson        String   @default("{}") @map("input_json")
+  currentStage     String   @default("intake") @map("current_stage")
+  deadline         DateTime?
+  completedAt      DateTime? @map("completed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      MissionRun[]
+  workItems WorkItem[]
+  reviews   Review[]
+  approvals Approval[]
+  councils  CouncilSession[]
+  decisions DecisionRecord[]
+  artifacts Artifact[]
+  effects   ExternalEffect[]
+  events    EventLog[]
+  files     FileAsset[]
+
+  @@index([workspaceId, status, updatedAt])
+  @@map("mission")
+}
+
+model MissionRun {
+  id               String   @id @default(cuid())
+  missionId        String   @map("mission_id")
+  idempotencyKey   String   @map("idempotency_key")
+  requestedBy      String   @default("local:owner") @map("requested_by")
+  status           String   @default("queued")
+  runtimeMode      String   @default("inline") @map("runtime_mode")
+  currentStepKey   String?  @map("current_step_key")
+  stateJson        String   @default("{}") @map("state_json")
+  budgetJson       String   @default("{}") @map("budget_json")
+  resultJson       String?  @map("result_json")
+  errorCode        String?  @map("error_code")
+  errorMessage     String?  @map("error_message")
+  attemptCount     Int      @default(0) @map("attempt_count")
+  maxAttempts      Int      @default(3) @map("max_attempts")
+  leaseOwner       String?  @map("lease_owner")
+  leaseEpoch       Int      @default(0) @map("lease_epoch")
+  leaseExpiresAt   DateTime? @map("lease_expires_at")
+  startedAt        DateTime? @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  mission      Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  orgUnits     OrgUnit[]
+  agents       Agent[]
+  workItems    WorkItem[]
+  steps        WorkflowStep[]
+  transitions  WorkflowTransition[]
+  reviews      Review[]
+  approvals    Approval[]
+  councils     CouncilSession[]
+  decisions    DecisionRecord[]
+  artifacts    Artifact[]
+  effects      ExternalEffect[]
+  events       EventLog[]
+
+  @@unique([missionId, idempotencyKey])
+  @@index([missionId, status, updatedAt])
+  @@index([status, leaseExpiresAt])
+  @@map("mission_run")
+}
+
+model WorkItem {
+  id               String   @id @default(cuid())
+  missionId        String   @map("mission_id")
+  missionRunId     String   @map("mission_run_id")
+  parentId         String?  @map("parent_id")
+  orgUnitId        String?  @map("org_unit_id")
+  agentId          String?  @map("agent_id")
+  key              String
+  sequence         Int
+  title            String
+  objective        String
+  workType         String   @default("general") @map("work_type")
+  status           String   @default("pending")
+  riskLevel        String   @default("GREEN") @map("risk_level")
+  inputJson        String   @default("{}") @map("input_json")
+  outputJson       String?  @map("output_json")
+  criteriaJson     String   @default("[]") @map("criteria_json")
+  evidenceJson     String   @default("[]") @map("evidence_json")
+  costMicros       BigInt   @default(0) @map("cost_micros")
+  attemptCount     Int      @default(0) @map("attempt_count")
+  maxAttempts      Int      @default(2) @map("max_attempts")
+  startedAt        DateTime? @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  mission    Mission    @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun MissionRun @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  parent     WorkItem?  @relation("WorkItemTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children   WorkItem[] @relation("WorkItemTree")
+  orgUnit    OrgUnit?   @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  agent      Agent?     @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  steps      WorkflowStep[]
+  reviews    Review[]
+  approvals  Approval[]
+  artifacts  Artifact[]
+  effects    ExternalEffect[]
+  events     EventLog[]
+
+  @@unique([missionRunId, key])
+  @@index([missionId, status])
+  @@index([missionRunId, sequence])
+  @@index([orgUnitId, status])
+  @@index([agentId, status])
+  @@map("work_item")
+}
+
+model WorkflowStep {
+  id             String   @id @default(cuid())
+  missionRunId   String   @map("mission_run_id")
+  workItemId     String?  @map("work_item_id")
+  orgUnitId      String?  @map("org_unit_id")
+  agentId        String?  @map("agent_id")
+  key            String
+  instanceKey    String   @default("main") @map("instance_key")
+  stepType       String   @map("step_type")
+  roleKey        String?  @map("role_key")
+  status         String   @default("pending")
+  attempt        Int      @default(1)
+  maxAttempts    Int      @default(2) @map("max_attempts")
+  inputJson      String   @default("{}") @map("input_json")
+  outputJson     String?  @map("output_json")
+  usageJson      String   @default("{}") @map("usage_json")
+  failureJson    String?  @map("failure_json")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  missionRun MissionRun @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  workItem   WorkItem?  @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  orgUnit    OrgUnit?   @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  agent      Agent?     @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  outgoing   WorkflowTransition[] @relation("TransitionFrom")
+  incoming   WorkflowTransition[] @relation("TransitionTo")
+  reviews    Review[]
+
+  @@unique([missionRunId, key, instanceKey, attempt])
+  @@index([missionRunId, status, createdAt])
+  @@index([workItemId, status])
+  @@map("workflow_step")
+}
+
+model WorkflowTransition {
+  id            String   @id @default(cuid())
+  missionRunId  String   @map("mission_run_id")
+  fromStepId    String?  @map("from_step_id")
+  toStepId      String?  @map("to_step_id")
+  sequence      Int
+  conditionType String   @default("always") @map("condition_type")
+  conditionJson String   @default("{}") @map("condition_json")
+  result        String   @default("selected")
+  selected      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  missionRun MissionRun    @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  fromStep   WorkflowStep? @relation("TransitionFrom", fields: [fromStepId], references: [id], onDelete: SetNull)
+  toStep     WorkflowStep? @relation("TransitionTo", fields: [toStepId], references: [id], onDelete: SetNull)
+
+  @@unique([missionRunId, sequence])
+  @@index([fromStepId, selected])
+  @@index([toStepId])
+  @@map("workflow_transition")
+}
+
+model Review {
+  id              String   @id @default(cuid())
+  missionId       String   @map("mission_id")
+  missionRunId    String   @map("mission_run_id")
+  workItemId      String?  @map("work_item_id")
+  workflowStepId  String?  @map("workflow_step_id")
+  reviewerAgentId String?  @map("reviewer_agent_id")
+  reviewType      String   @map("review_type")
+  status          String   @default("pending")
+  verdict         String?
+  severity        String   @default("info")
+  score           Float    @default(0)
+  confidence      Float    @default(0)
+  criteriaJson    String   @default("[]") @map("criteria_json")
+  evidenceJson    String   @default("[]") @map("evidence_json")
+  failureJson     String   @default("[]") @map("failure_json")
+  summary         String   @default("")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  mission       Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun    MissionRun   @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  workItem      WorkItem?    @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  workflowStep  WorkflowStep? @relation(fields: [workflowStepId], references: [id], onDelete: SetNull)
+  reviewerAgent Agent?       @relation("ReviewAgent", fields: [reviewerAgentId], references: [id], onDelete: SetNull)
+
+  @@index([missionRunId, status, reviewType])
+  @@index([workItemId, status])
+  @@map("review")
+}
+
+model Approval {
+  id           String   @id @default(cuid())
+  missionId    String   @map("mission_id")
+  missionRunId String   @map("mission_run_id")
+  workItemId   String?  @map("work_item_id")
+  orgUnitId    String?  @map("org_unit_id")
+  agentId      String?  @map("agent_id")
+  approvalType String   @map("approval_type")
+  status       String   @default("pending")
+  riskLevel    String   @default("YELLOW") @map("risk_level")
+  targetType   String   @map("target_type")
+  targetId     String   @map("target_id")
+  requestedBy  String   @map("requested_by")
+  decidedBy    String?  @map("decided_by")
+  scopeHash    String   @map("scope_hash")
+  requestJson  String   @default("{}") @map("request_json")
+  decisionJson String?  @map("decision_json")
+  expiresAt    DateTime? @map("expires_at")
+  decidedAt    DateTime? @map("decided_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  mission    Mission    @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun MissionRun @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  workItem   WorkItem?  @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  orgUnit    OrgUnit?   @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  agent      Agent?     @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  decisions  DecisionRecord[]
+
+  @@unique([missionRunId, approvalType, targetType, targetId, scopeHash])
+  @@index([missionRunId, status, createdAt])
+  @@index([missionId, status])
+  @@map("approval")
+}
+
+model CouncilSession {
+  id            String   @id @default(cuid())
+  missionId     String   @map("mission_id")
+  missionRunId  String?  @map("mission_run_id")
+  topic         String
+  status        String   @default("draft")
+  currentRound  Int      @default(0) @map("current_round")
+  budgetMicros  BigInt   @default(0) @map("budget_micros")
+  costMicros    BigInt   @default(0) @map("cost_micros")
+  configJson    String   @default("{}") @map("config_json")
+  completedAt   DateTime? @map("completed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  mission    Mission    @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun MissionRun? @relation(fields: [missionRunId], references: [id], onDelete: SetNull)
+  messages   CouncilMessage[]
+  decisions  DecisionRecord[]
+  artifacts  Artifact[]
+
+  @@index([missionId, status])
+  @@index([missionRunId, status])
+  @@map("council_session")
+}
+
+model CouncilMessage {
+  id               String   @id @default(cuid())
+  councilSessionId String   @map("council_session_id")
+  roleId           String?  @map("role_id")
+  agentId          String?  @map("agent_id")
+  round            Int      @default(1)
+  speakerType      String   @map("speaker_type")
+  messageType      String   @map("message_type")
+  content          String
+  metadataJson     String   @default("{}") @map("metadata_json")
+  inputTokens      Int      @default(0) @map("input_tokens")
+  outputTokens     Int      @default(0) @map("output_tokens")
+  costMicros       BigInt   @default(0) @map("cost_micros")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  councilSession CouncilSession @relation(fields: [councilSessionId], references: [id], onDelete: Cascade)
+  role           Role?          @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  agent          Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([councilSessionId, round, createdAt])
+  @@map("council_message")
+}
+
+model DecisionRecord {
+  id               String   @id @default(cuid())
+  missionId        String   @map("mission_id")
+  missionRunId     String?  @map("mission_run_id")
+  councilSessionId String?  @map("council_session_id")
+  approvalId       String?  @map("approval_id")
+  sourceType       String   @map("source_type")
+  decisionType     String   @map("decision_type")
+  status           String   @default("recorded")
+  summary          String
+  rationale        String   @default("")
+  confidence       Float    @default(0)
+  alternativesJson String   @default("[]") @map("alternatives_json")
+  unresolvedJson   String   @default("[]") @map("unresolved_json")
+  evidenceJson     String   @default("[]") @map("evidence_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  mission        Mission        @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun     MissionRun?    @relation(fields: [missionRunId], references: [id], onDelete: SetNull)
+  councilSession CouncilSession? @relation(fields: [councilSessionId], references: [id], onDelete: SetNull)
+  approval       Approval?      @relation(fields: [approvalId], references: [id], onDelete: SetNull)
+
+  @@index([missionId, sourceType, createdAt])
+  @@index([missionRunId, status])
+  @@map("decision_record")
+}
+
+model Artifact {
+  id               String   @id @default(cuid())
+  missionId        String   @map("mission_id")
+  missionRunId     String?  @map("mission_run_id")
+  workItemId       String?  @map("work_item_id")
+  councilSessionId String?  @map("council_session_id")
+  fileAssetId      String?  @map("file_asset_id")
+  createdByAgentId String?  @map("created_by_agent_id")
+  artifactType     String   @map("artifact_type")
+  title            String
+  version          Int      @default(1)
+  status           String   @default("draft")
+  contentText      String   @default("") @map("content_text")
+  contentJson      String   @default("{}") @map("content_json")
+  evidenceJson     String   @default("[]") @map("evidence_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  mission        Mission        @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun     MissionRun?    @relation(fields: [missionRunId], references: [id], onDelete: SetNull)
+  workItem       WorkItem?      @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  councilSession CouncilSession? @relation(fields: [councilSessionId], references: [id], onDelete: SetNull)
+  fileAsset      FileAsset?     @relation(fields: [fileAssetId], references: [id], onDelete: SetNull)
+  createdByAgent Agent?         @relation(fields: [createdByAgentId], references: [id], onDelete: SetNull)
+
+  @@unique([missionRunId, artifactType, version])
+  @@index([missionId, artifactType, status])
+  @@index([workItemId, status])
+  @@map("artifact")
+}
+
+model ExternalEffect {
+  id                String   @id @default(cuid())
+  missionId         String   @map("mission_id")
+  missionRunId      String   @map("mission_run_id")
+  workItemId        String?  @map("work_item_id")
+  agentId           String?  @map("agent_id")
+  actionType        String   @map("action_type")
+  target            String
+  status            String   @default("prepared")
+  idempotencyKey    String   @unique @map("idempotency_key")
+  requestHash       String   @map("request_hash")
+  requestJson       String   @default("{}") @map("request_json")
+  resultJson        String?  @map("result_json")
+  providerRequestId String?  @map("provider_request_id")
+  replayPolicy      String   @default("manual_reconcile") @map("replay_policy")
+  leaseEpoch        Int      @default(0) @map("lease_epoch")
+  errorCode         String?  @map("error_code")
+  errorMessage      String?  @map("error_message")
+  approvedBy        String?  @map("approved_by")
+  approvedAt        DateTime? @map("approved_at")
+  executedAt        DateTime? @map("executed_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  mission    Mission    @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun MissionRun @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  workItem   WorkItem?  @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  agent      Agent?     @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([missionRunId, status, createdAt])
+  @@index([missionId, actionType, status])
+  @@map("external_effect")
+}
+
+model EventLog {
+  id           String   @id @default(cuid())
+  workspaceId  String   @map("workspace_id")
+  missionId    String?  @map("mission_id")
+  missionRunId String?  @map("mission_run_id")
+  workItemId   String?  @map("work_item_id")
+  sourceType   String   @map("source_type")
+  sourceId     String   @map("source_id")
+  sequence     Int
+  eventType    String   @map("event_type")
+  actorType    String   @default("system") @map("actor_type")
+  actorId      String?  @map("actor_id")
+  severity     String   @default("info")
+  message      String
+  dataJson     String   @default("{}") @map("data_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mission    Mission?   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun MissionRun? @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  workItem   WorkItem?  @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceType, sourceId, sequence])
+  @@index([workspaceId, createdAt])
+  @@index([missionId, createdAt])
+  @@index([missionRunId, createdAt])
+  @@map("event_log")
+}
+
+model FileAsset {
+  id           String   @id @default(cuid())
+  workspaceId  String   @map("workspace_id")
+  missionId    String?  @map("mission_id")
+  kind         String
+  name         String
+  path         String
+  mimeType     String   @map("mime_type")
+  sizeBytes    BigInt   @default(0) @map("size_bytes")
+  checksum     String
+  metadataJson String   @default("{}") @map("metadata_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mission   Mission?  @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  artifacts Artifact[]
+
+  @@unique([workspaceId, path])
+  @@index([missionId, kind, createdAt])
+  @@map("file_asset")
+}

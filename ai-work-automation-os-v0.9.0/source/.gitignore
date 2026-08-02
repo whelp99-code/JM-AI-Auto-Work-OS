@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.env
+.env.local
+data/
+backups/
+artifacts/
+.aiwa-backups/
+.aiwa-version
+.aiwa-install-report.json
+*.log
+prisma/*.db
+prisma/*.db-*
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm
+.DS_Store

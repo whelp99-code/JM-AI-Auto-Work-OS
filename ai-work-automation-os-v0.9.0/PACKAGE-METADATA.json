@@ -1,0 +1,19 @@
+{
+  "product": "AI Work Automation OS",
+  "version": "0.9.0",
+  "releaseType": "local-first-canonical-database-rebuild",
+  "databaseArchitecture": "single-local-sqlite-18-canonical-tables",
+  "physicalTableCount": 18,
+  "legacyModelCount": 44,
+  "runtimeLedgerPreserved": false,
+  "projectionDatabase": false,
+  "localDatabase": "SQLite",
+  "multiUser": false,
+  "multiTenant": false,
+  "supabase": "deferred",
+  "upgradeFrom": "0.8.0",
+  "databaseBackupBeforeMigration": true,
+  "atomicDatabaseSwap": true,
+  "rollbackSidecar": true,
+  "createdAt": "2026-07-31"
+}

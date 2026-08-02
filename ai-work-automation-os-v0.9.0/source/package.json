@@ -1,0 +1,43 @@
+{
+  "name": "ai-work-automation-os",
+  "version": "0.9.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -H 127.0.0.1",
+    "start": "next start -H 127.0.0.1",
+    "build": "prisma generate && next build",
+    "check": "tsc --noEmit",
+    "test": "DATABASE_URL=\"file:../data/test-v0.9.0.db\" node scripts/db-v090-reset.mjs --yes && DATABASE_URL=\"file:../data/test-v0.9.0.db\" prisma generate && DATABASE_URL=\"file:../data/test-v0.9.0.db\" prisma db push --skip-generate && DATABASE_URL=\"file:../data/test-v0.9.0.db\" node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "db:rebuild": "node scripts/db-v090-migrate.mjs",
+    "db:rebuild:dry-run": "node scripts/db-v090-migrate.mjs --dry-run",
+    "db:rollback:v0.8": "node scripts/db-v090-rollback.mjs --yes",
+    "db:doctor": "node scripts/db-v090-doctor.mjs",
+    "db:status": "node scripts/db-v090-doctor.mjs",
+    "db:backup": "node scripts/local-backup-v090.mjs",
+    "db:reset": "node scripts/db-v090-reset.mjs --yes",
+    "db:push": "prisma generate && prisma db push && node scripts/db-v090-seed.mjs",
+    "db:seed": "node scripts/db-v090-seed.mjs",
+    "local:install": "bash scripts/install-local-v090.sh",
+    "local:verify": "node scripts/db-v090-doctor.mjs && npm run verify:v0.9.0:offline",
+    "verify:v0.9.0": "npm run check && npm run local:verify && npm test && npm run build",
+    "test:v0.9.0:db": "node --test tests/v090-schema.test.mjs tests/v090-migration.test.mjs",
+    "test:v0.9.0:pure": "node verification/scripts/v090_pure_tests.mjs",
+    "verify:v0.9.0:offline": "bash ./verify-offline.sh"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.10.1",
+    "next": "^15.5.21",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.32",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "prisma": "^6.10.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

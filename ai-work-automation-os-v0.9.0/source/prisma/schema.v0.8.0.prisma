@@ -1,0 +1,1153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model CouncilSession {
+  id               String                @id @default(cuid())
+  missionId        String?
+  question         String
+  status           String                @default("draft")
+  participants     String
+  budgetUsd        Float                 @default(0.5)
+  estimatedCostUsd Float                 @default(0)
+  source           String                @default("native")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  completedAt      DateTime?
+  rounds           CouncilRound[]
+  responses        ParticipantResponse[]
+  consensus        Consensus?
+  artifacts        Artifact[]
+  auditEvents      AuditEvent[]
+  mission          Mission?              @relation(fields: [missionId], references: [id], onDelete: SetNull)
+
+  @@index([missionId])
+}
+
+model CouncilRound {
+  id          String                @id @default(cuid())
+  sessionId   String
+  roundNumber Int
+  type        String
+  prompt      String
+  status      String                @default("completed")
+  createdAt   DateTime              @default(now())
+  session     CouncilSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  responses   ParticipantResponse[]
+
+  @@unique([sessionId, roundNumber, type])
+}
+
+model ParticipantResponse {
+  id           String         @id @default(cuid())
+  sessionId    String
+  roundId      String?
+  provider     String
+  role         String
+  status       String         @default("success")
+  content      String
+  model        String?
+  promptTokens Int            @default(0)
+  outputTokens Int            @default(0)
+  costUsd      Float          @default(0)
+  latencyMs    Int            @default(0)
+  errorCode    String?
+  rawMetadata  String?
+  createdAt    DateTime       @default(now())
+  session      CouncilSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  round        CouncilRound?  @relation(fields: [roundId], references: [id], onDelete: SetNull)
+}
+
+model Consensus {
+  id                 String         @id @default(cuid())
+  sessionId          String         @unique
+  agreements         String
+  conflicts          String
+  decision           String
+  confidence         Float          @default(0.7)
+  userEditedDecision String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  session            CouncilSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Artifact {
+  id        String         @id @default(cuid())
+  sessionId String
+  type      String
+  version   Int
+  markdown  String
+  createdAt DateTime       @default(now())
+  session   CouncilSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, type, version])
+}
+
+model AuditEvent {
+  id        String          @id @default(cuid())
+  sessionId String?
+  type      String
+  message   String
+  metadata  String?
+  createdAt DateTime        @default(now())
+  session   CouncilSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+}
+
+model ImportError {
+  id         String   @id @default(cuid())
+  sourcePath String
+  message    String
+  createdAt  DateTime @default(now())
+}
+
+model Organization {
+  id               String             @id @default(cuid())
+  name             String
+  slug             String             @unique
+  status           String             @default("active")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  teams            Team[]
+  missions         Mission[]
+  missionRuns      MissionRun[]
+  memberships      OrganizationMembership[]
+  externalEffects  ExternalEffect[]
+  graphDefinitions GraphDefinition[]
+  graphRuns        GraphRun[]
+  policies         DelegationPolicy[]
+  capabilityAssets CapabilityAsset[]
+  missionOrganizations MissionOrganization[]
+}
+
+model OrganizationMembership {
+  id             String       @id @default(cuid())
+  organizationId String
+  principalId    String
+  role           String
+  status         String       @default("active")
+  createdBy      String
+  updatedBy      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, principalId])
+  @@index([principalId, status])
+  @@index([organizationId, status])
+}
+
+model Team {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  mission        String
+  status         String       @default("active")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roles          AgentRole[]
+  missions       Mission[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, status])
+}
+
+model AgentRole {
+  id                   String           @id @default(cuid())
+  teamId               String
+  name                 String
+  slug                 String
+  category             String
+  description          String
+  responsibilities     String           @default("[]")
+  requiredCapabilities String           @default("[]")
+  modelPolicy          String           @default("benchmark_selected")
+  skills               String           @default("[]")
+  plugins              String           @default("[]")
+  permissions          String           @default("[]")
+  concurrencyLimit     Int              @default(1)
+  isLead               Boolean          @default(false)
+  status               String           @default("active")
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  team                 Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  workItems            WorkItem[]
+  roleCapabilities     RoleCapability[]
+
+  @@unique([teamId, slug])
+  @@index([teamId, category, status])
+}
+
+model CapabilityAsset {
+  id             String           @id @default(cuid())
+  organizationId String
+  kind           String
+  name           String
+  version        String           @default("unversioned")
+  status         String           @default("candidate")
+  riskLevel      String           @default("YELLOW")
+  sourceUrl      String?
+  evidence       String           @default("[]")
+  metadata       String           @default("{}")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roles          RoleCapability[]
+
+  @@unique([organizationId, kind, name, version])
+  @@index([organizationId, kind, status])
+}
+
+model RoleCapability {
+  roleId        String
+  capabilityId  String
+  required      Boolean         @default(true)
+  configuration String          @default("{}")
+  role          AgentRole       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  capability    CapabilityAsset @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, capabilityId])
+}
+
+model Mission {
+  id               String           @id @default(cuid())
+  organizationId   String
+  teamId           String?
+  title            String
+  objective        String
+  missionType      String           @default("general")
+  status           String           @default("draft")
+  priority         String           @default("normal")
+  riskLevel        String           @default("GREEN")
+  approvalMode     String           @default("delegated")
+  budgetUsd        Float            @default(1)
+  estimatedCostUsd Float            @default(0)
+  successCriteria  String           @default("[]")
+  constraints      String           @default("[]")
+  input            String           @default("{}")
+  currentStage     String           @default("intake")
+  leaseOwner       String?
+  leaseExpiresAt   DateTime?
+  deadline         DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  completedAt      DateTime?
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team             Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  workItems        WorkItem[]
+  evaluations      Evaluation[]
+  decisions        DecisionRecord[]
+  deliverables     Deliverable[]
+  events           MissionEvent[]
+  councilSessions  CouncilSession[]
+  runs             MissionRun[]
+  graphRuns        GraphRun[]
+  externalEffects  ExternalEffect[]
+  missionOrganizations MissionOrganization[]
+
+  @@index([organizationId, status])
+  @@index([teamId, status])
+}
+
+model MissionRun {
+  id               String       @id @default(cuid())
+  organizationId   String
+  missionId        String
+  idempotencyKey   String
+  requestHash      String
+  requestedBy      String
+  status           String       @default("queued")
+  graphRuntimeMode String       @default("legacy")
+  graphRuntimeDecisionJson String    @default("{}")
+  organizationRuntimeMode String @default("disabled")
+  organizationRuntimeDecisionJson String @default("{}")
+  queueMessageId   String?      @unique
+  queueGeneration  Int          @default(0)
+  attemptCount     Int          @default(0)
+  maxAttempts      Int          @default(3)
+  leaseOwner       String?
+  leaseEpoch       Int          @default(0)
+  leaseExpiresAt   DateTime?
+  fenceCheckCount  Int          @default(0)
+  nextAttemptAt    DateTime?
+  lastEnqueuedAt   DateTime?
+  lastReconciledAt DateTime?
+  reconcileCount   Int          @default(0)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  errorCode        String?
+  errorMessage     String?
+  result           String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mission          Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  graphRun         GraphRun?
+  shadowAssessment GraphShadowAssessment?
+  externalEffects  ExternalEffect[]
+  missionOrganization MissionOrganization?
+
+  @@unique([missionId, idempotencyKey])
+  @@index([organizationId, status])
+  @@index([missionId, status])
+  @@index([status, nextAttemptAt, updatedAt])
+}
+
+model ExternalEffect {
+  id                String       @id @default(cuid())
+  organizationId    String
+  missionId         String
+  missionRunId      String
+  workItemId        String
+  graphNodeRunId   String?
+  effectKey         String       @unique
+  requestHash       String
+  operation         String
+  actionKind        String
+  replayPolicy      String
+  status            String       @default("prepared")
+  runAttempt        Int
+  leaseEpoch        Int
+  argumentsJson     String
+  provider          String?
+  providerRequestId String?
+  result            String?
+  errorCode         String?
+  errorMessage      String?
+  reconciledBy      String?
+  reconciliationNote String?
+  reconciledAt      DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mission           Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun        MissionRun   @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  workItem          WorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  graphNodeRun      GraphNodeRun? @relation(fields: [graphNodeRunId], references: [id], onDelete: SetNull)
+
+  @@index([missionRunId, status])
+  @@index([workItemId, status])
+  @@index([graphNodeRunId, status])
+  @@index([organizationId, createdAt])
+}
+
+model WorkItem {
+  id                 String           @id @default(cuid())
+  missionId          String
+  roleId             String?
+  graphRunId         String?
+  sourceNodeRunId    String?
+  missionTeamId      String?
+  agentInstanceId    String?
+  taskKey            String?
+  sequence           Int
+  kind               String
+  actionKind         String           @default("research")
+  title              String
+  objective          String
+  status             String           @default("pending")
+  riskLevel          String           @default("GREEN")
+  acceptanceCriteria String           @default("[]")
+  dependencies       String           @default("[]")
+  input              String           @default("{}")
+  output             String?
+  attemptCount       Int              @default(0)
+  maxAttempts        Int              @default(2)
+  budgetUsd          Float            @default(0)
+  estimatedCostUsd   Float            @default(0)
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  mission            Mission          @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  role               AgentRole?       @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  graphRun           GraphRun?        @relation(fields: [graphRunId], references: [id], onDelete: SetNull)
+  sourceNodeRun      GraphNodeRun?    @relation(fields: [sourceNodeRunId], references: [id], onDelete: SetNull)
+  missionTeam        MissionTeam?     @relation(fields: [missionTeamId], references: [id], onDelete: SetNull)
+  agentInstance      AgentInstance?   @relation(fields: [agentInstanceId], references: [id], onDelete: SetNull)
+  organizationAssignment OrganizationAssignment?
+  dispatches         Dispatch[]
+  evaluations        Evaluation[]
+  decisions          DecisionRecord[]
+  externalEffects    ExternalEffect[]
+
+  @@unique([missionId, sequence])
+  @@unique([graphRunId, taskKey])
+  @@index([missionId, status])
+  @@index([graphRunId, status])
+  @@index([sourceNodeRunId])
+  @@index([missionTeamId, status])
+  @@index([agentInstanceId, status])
+  @@index([roleId, status])
+}
+
+model Dispatch {
+  id           String    @id @default(cuid())
+  workItemId   String
+  executor     String
+  provider     String?
+  assignee     String?
+  status       String    @default("queued")
+  attempt      Int       @default(1)
+  input        String    @default("{}")
+  output       String?
+  errorCode    String?
+  errorMessage String?
+  costUsd      Float     @default(0)
+  latencyMs    Int       @default(0)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workItem     WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, attempt])
+  @@index([workItemId, status])
+}
+
+model Evaluation {
+  id                  String    @id @default(cuid())
+  missionId           String
+  workItemId          String?
+  graphNodeRunId      String?
+  verificationProfile String?
+  evaluator  String
+  status     String
+  score      Float     @default(0)
+  criteria   String    @default("[]")
+  findings   String    @default("[]")
+  evidence   String    @default("[]")
+  createdAt  DateTime  @default(now())
+  mission    Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  workItem   WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  graphNodeRun GraphNodeRun? @relation(fields: [graphNodeRunId], references: [id], onDelete: SetNull)
+
+  @@index([missionId, status])
+  @@index([workItemId, status])
+  @@index([graphNodeRunId, status])
+}
+
+model DecisionRecord {
+  id             String    @id @default(cuid())
+  missionId      String
+  workItemId     String?
+  graphRunId     String?
+  graphNodeRunId String?
+  decisionKey    String?   @unique
+  scopeHash      String?
+  policySnapshot String?
+  expiresAt      DateTime?
+  resumedAt      DateTime?
+  classification String
+  authority      String
+  status         String    @default("pending")
+  question       String
+  options        String    @default("[]")
+  resolution     String?
+  rationale      String?
+  decidedBy      String?
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  mission        Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  workItem       WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  graphRun       GraphRun? @relation(fields: [graphRunId], references: [id], onDelete: SetNull)
+  graphNodeRun   GraphNodeRun? @relation(fields: [graphNodeRunId], references: [id], onDelete: SetNull)
+
+  @@index([missionId, status])
+  @@index([workItemId, status])
+  @@index([graphRunId, status])
+  @@index([graphNodeRunId, status])
+}
+
+model Deliverable {
+  id            String   @id @default(cuid())
+  missionId     String
+  graphRunId    String?
+  sourceCheckpointId String?
+  stateHash     String?
+  type          String
+  schemaVersion String   @default("v1")
+  version       Int
+  status        String   @default("draft")
+  data          String
+  markdown      String
+  createdAt     DateTime @default(now())
+  mission       Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  graphRun      GraphRun? @relation(fields: [graphRunId], references: [id], onDelete: SetNull)
+  sourceCheckpoint GraphCheckpoint? @relation(fields: [sourceCheckpointId], references: [id], onDelete: SetNull)
+
+  @@unique([missionId, type, version])
+  @@index([missionId, status])
+  @@index([graphRunId, status])
+  @@index([sourceCheckpointId])
+}
+
+model MissionEvent {
+  id        String   @id @default(cuid())
+  missionId String
+  type      String
+  actor     String
+  message   String
+  metadata  String?
+  createdAt DateTime @default(now())
+  mission   Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@index([missionId, createdAt])
+}
+
+
+model GraphDefinition {
+  id             String       @id @default(cuid())
+  organizationId String
+  key            String
+  version        Int
+  schemaVersion  String       @default("graph-spec.v1")
+  status         String       @default("active")
+  specJson       String
+  specHash       String
+  policyVersion  String
+  createdBy      String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs           GraphRun[]
+
+  @@unique([organizationId, key, version])
+  @@index([organizationId, status])
+  @@index([specHash])
+}
+
+model GraphRun {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  missionId             String
+  missionRunId          String       @unique
+  definitionId          String
+  mode                   String       @default("conditional")
+  status                 String       @default("running")
+  currentNodeKey         String
+  stateJson              String
+  stateVersion           Int          @default(0)
+  stateHash              String
+  specHash               String
+  policyVersion          String
+  transitionCount        Int          @default(0)
+  eventSequence          Int          @default(0)
+  budgetVersion          Int          @default(0)
+  maxTransitions         Int
+  maxIterations          Int
+  maxFanOut              Int
+  maxParallel            Int
+  sameFailureLimit       Int
+  callsLimit             Int
+  callsUsed              Int          @default(0)
+  callsReserved          Int          @default(0)
+  tokensLimit            Int
+  tokensUsed             Int          @default(0)
+  tokensReserved         Int          @default(0)
+  costLimitMicros        BigInt
+  costUsedMicros         BigInt       @default(0)
+  costReservedMicros     BigInt       @default(0)
+  startedAt              DateTime     @default(now())
+  pausedAt               DateTime?
+  completedAt            DateTime?
+  errorCode              String?
+  errorMessage           String?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mission                Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun             MissionRun   @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  definition             GraphDefinition @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  nodeRuns               GraphNodeRun[]
+  checkpoints            GraphCheckpoint[]
+  events                 GraphEvent[]
+  failures               FailurePacket[]
+  budgetEntries          GraphBudgetEntry[]
+  roleInvocations        GraphRoleInvocation[]
+  shadowAssessment       GraphShadowAssessment?
+  decisions              DecisionRecord[]
+  workItems              WorkItem[]
+  deliverables           Deliverable[]
+
+  @@index([organizationId, status])
+  @@index([missionId, status])
+  @@index([definitionId, status])
+}
+
+model GraphNodeRun {
+  id              String       @id @default(cuid())
+  graphRunId      String
+  nodeKey         String
+  instanceKey     String       @default("root")
+  nodeKind        String
+  role            String
+  handlerId       String
+  status          String       @default("pending")
+  attempt         Int          @default(1)
+  inputJson       String
+  inputHash       String
+  outputJson      String?
+  outputHash      String?
+  stateDeltaJson  String?
+  usageJson       String?
+  artifactRefsJson String      @default("[]")
+  signalsJson     String       @default("[]")
+  errorCode       String?
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  graphRun        GraphRun     @relation(fields: [graphRunId], references: [id], onDelete: Cascade)
+  failures        FailurePacket[]
+  budgetEntries   GraphBudgetEntry[]
+  decisions       DecisionRecord[]
+  workItems       WorkItem[]
+  evaluations     Evaluation[]
+  externalEffects ExternalEffect[]
+  roleInvocations GraphRoleInvocation[]
+  organizationAssignments OrganizationAssignment[]
+  checkpoints     GraphCheckpoint[]
+
+  @@unique([graphRunId, nodeKey, instanceKey, attempt])
+  @@index([graphRunId, status])
+  @@index([graphRunId, nodeKey, instanceKey])
+}
+
+model GraphCheckpoint {
+  id            String       @id @default(cuid())
+  graphRunId    String
+  nodeRunId     String?
+  sequence      Int
+  stateVersion  Int
+  stateJson     String
+  stateHash     String
+  reason        String
+  createdAt     DateTime     @default(now())
+  graphRun      GraphRun     @relation(fields: [graphRunId], references: [id], onDelete: Cascade)
+  nodeRun       GraphNodeRun? @relation(fields: [nodeRunId], references: [id], onDelete: SetNull)
+  deliverables  Deliverable[]
+
+  @@unique([graphRunId, sequence])
+  @@unique([graphRunId, stateVersion])
+  @@index([nodeRunId])
+}
+
+model GraphEvent {
+  id           String   @id @default(cuid())
+  graphRunId   String
+  sequence     Int
+  type         String
+  nodeKey      String?
+  instanceKey  String?
+  actor        String
+  reasonCode   String?
+  payloadJson  String?
+  createdAt    DateTime @default(now())
+  graphRun     GraphRun @relation(fields: [graphRunId], references: [id], onDelete: Cascade)
+
+  @@unique([graphRunId, sequence])
+  @@index([graphRunId, type])
+}
+
+model FailurePacket {
+  id               String       @id @default(cuid())
+  graphRunId       String
+  nodeRunId        String?
+  schemaVersion    String       @default("failure-packet.v1")
+  fingerprint      String
+  occurrence       Int
+  failureType      String
+  severity         String
+  blocking         Boolean      @default(true)
+  checkId          String
+  evidenceRefsJson String       @default("[]")
+  expected         String
+  observed         String
+  recommendedRoute String
+  retryable        Boolean
+  status           String       @default("open")
+  resolvedAt       DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  graphRun         GraphRun     @relation(fields: [graphRunId], references: [id], onDelete: Cascade)
+  nodeRun          GraphNodeRun? @relation(fields: [nodeRunId], references: [id], onDelete: SetNull)
+
+  @@unique([graphRunId, fingerprint, occurrence])
+  @@index([graphRunId, status, blocking])
+  @@index([nodeRunId])
+}
+
+model GraphBudgetEntry {
+  id               String       @id @default(cuid())
+  graphRunId       String
+  nodeRunId        String?
+  idempotencyKey   String       @unique
+  kind             String
+  callDelta        Int          @default(0)
+  inputTokenDelta  Int          @default(0)
+  outputTokenDelta Int          @default(0)
+  amountMicros     BigInt       @default(0)
+  metadataJson     String       @default("{}")
+  createdAt        DateTime     @default(now())
+  graphRun         GraphRun     @relation(fields: [graphRunId], references: [id], onDelete: Cascade)
+  nodeRun          GraphNodeRun? @relation(fields: [nodeRunId], references: [id], onDelete: SetNull)
+
+  @@index([graphRunId, createdAt])
+  @@index([nodeRunId, kind])
+}
+
+model GraphRoleInvocation {
+  id                   String       @id @default(cuid())
+  organizationId       String
+  graphRunId           String
+  nodeRunId            String
+  taskId               String       @unique
+  role                 String
+  mode                 String
+  provider             String?
+  model                String?
+  modelClass           String
+  registryVersion      String
+  modelEntryId         String
+  selectionHash        String
+  status               String       @default("running")
+  attemptCount         Int          @default(0)
+  requestHash          String
+  outputJson           String?
+  outputHash           String?
+  usageJson            String?
+  routeReasonCodesJson String       @default("[]")
+  providerRequestId    String?
+  errorCode            String?
+  errorMessage         String?
+  startedAt            DateTime     @default(now())
+  completedAt          DateTime?
+  budgetAccountedAt    DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  graphRun             GraphRun     @relation(fields: [graphRunId], references: [id], onDelete: Cascade)
+  nodeRun              GraphNodeRun @relation(fields: [nodeRunId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([graphRunId, status])
+  @@index([nodeRunId, status])
+  @@index([provider, model, createdAt])
+  @@index([modelEntryId, createdAt])
+  @@index([budgetAccountedAt, status])
+}
+
+model GraphShadowAssessment {
+  id             String     @id @default(cuid())
+  organizationId String
+  graphRunId     String     @unique
+  missionRunId   String     @unique
+  status         String
+  assessmentJson String
+  assessmentHash String
+  mismatchCount  Int        @default(0)
+  riskCount      Int        @default(0)
+  canaryEligible Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  graphRun       GraphRun   @relation(fields: [graphRunId], references: [id], onDelete: Cascade)
+  missionRun     MissionRun @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([canaryEligible, createdAt])
+}
+
+
+model MissionOrganization {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  missionId             String
+  missionRunId          String       @unique
+  key                   String
+  version               Int          @default(1)
+  runtimeMode           String       @default("shadow")
+  status                String       @default("planned")
+  objective             String
+  planJson              String
+  planHash              String
+  policyJson            String
+  policyHash            String
+  departmentCount       Int          @default(0)
+  teamCount             Int          @default(0)
+  agentCount            Int          @default(0)
+  maxDepartments        Int
+  maxTeams              Int
+  maxAgents             Int
+  maxDepth              Int
+  budgetLimitMicros     BigInt
+  budgetReservedMicros  BigInt       @default(0)
+  budgetUsedMicros      BigInt       @default(0)
+  eventSequence         Int          @default(0)
+  createdBy             String
+  activatedAt           DateTime?
+  completedAt           DateTime?
+  retiredAt             DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mission               Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionRun            MissionRun   @relation(fields: [missionRunId], references: [id], onDelete: Cascade)
+  plans                 OrganizationPlanRecord[]
+  departments           MissionDepartment[]
+  teams                 MissionTeam[]
+  roleDefinitions       RoleDefinition[]
+  agents                AgentInstance[]
+  staffingRequests      StaffingRequest[]
+  teamFormationRequests TeamFormationRequest[]
+  delegations           OrganizationDelegation[]
+  events                OrganizationRuntimeEvent[]
+  graphBindings         TeamGraphBinding[]
+  assignments           OrganizationAssignment[]
+
+  @@unique([missionRunId, key, version])
+  @@index([organizationId, status])
+  @@index([missionId, status])
+  @@index([planHash])
+}
+
+model OrganizationPlanRecord {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  version               Int
+  status                String              @default("compiled")
+  proposalJson          String
+  compiledJson          String
+  planHash              String
+  policyHash            String
+  compilerIssuesJson    String              @default("[]")
+  countsJson            String
+  createdBy             String
+  createdAt             DateTime            @default(now())
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+
+  @@unique([missionOrganizationId, version])
+  @@index([planHash])
+}
+
+model MissionDepartment {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  key                   String
+  name                  String
+  mission               String
+  status                String              @default("active")
+  depth                 Int                 @default(1)
+  leaderRoleKey         String
+  requiredCapabilities  String              @default("[]")
+  completionCriteria    String              @default("[]")
+  budgetLimitMicros     BigInt
+  budgetReservedMicros  BigInt               @default(0)
+  budgetUsedMicros      BigInt               @default(0)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  missionOrganization   MissionOrganization  @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  teams                 MissionTeam[]
+  roles                 RoleDefinition[]
+  agents                AgentInstance[]
+  staffingRequests      StaffingRequest[]
+  teamFormationRequests TeamFormationRequest[]
+  graphBindings         TeamGraphBinding[]
+  assignments           OrganizationAssignment[]
+
+  @@unique([missionOrganizationId, key])
+  @@index([missionOrganizationId, status])
+}
+
+model MissionTeam {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  departmentId          String
+  parentTeamId          String?
+  key                   String
+  name                  String
+  objective             String
+  status                String              @default("active")
+  depth                 Int                 @default(2)
+  leadRoleKey           String
+  graphSpecKey          String
+  minMembers            Int
+  maxMembers            Int
+  requiredCapabilities  String              @default("[]")
+  completionCriteria    String              @default("[]")
+  budgetLimitMicros     BigInt
+  budgetReservedMicros  BigInt               @default(0)
+  budgetUsedMicros      BigInt               @default(0)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  missionOrganization   MissionOrganization  @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  department            MissionDepartment    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  parentTeam            MissionTeam?         @relation("MissionTeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
+  childTeams            MissionTeam[]        @relation("MissionTeamHierarchy")
+  roles                 RoleDefinition[]
+  agents                AgentInstance[]
+  staffingRequests      StaffingRequest[]
+  graphBindings         TeamGraphBinding[]
+  assignments           OrganizationAssignment[]
+  workItems             WorkItem[]
+
+  @@unique([missionOrganizationId, key])
+  @@index([departmentId, status])
+  @@index([parentTeamId])
+}
+
+model RoleDefinition {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  departmentId          String?
+  teamId                String?
+  key                   String
+  title                 String
+  category              String
+  description           String
+  specJson              String
+  reportsToRoleKey      String?
+  toolPolicyId          String
+  modelClass            String
+  isLead                Boolean             @default(false)
+  isVerifier            Boolean             @default(false)
+  mayCreateRoles        Boolean             @default(false)
+  mayCreateTeams        Boolean             @default(false)
+  maxDirectReports      Int                 @default(0)
+  budgetAuthorityMicros BigInt               @default(0)
+  temporary             Boolean             @default(true)
+  status                String              @default("active")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  department            MissionDepartment?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  team                  MissionTeam?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  agents                AgentInstance[]
+
+  @@unique([missionOrganizationId, key])
+  @@index([departmentId, status])
+  @@index([teamId, status])
+  @@index([isVerifier, status])
+}
+
+model AgentInstance {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  departmentId          String?
+  teamId                String?
+  roleDefinitionId      String
+  managerAgentId        String?
+  ordinal               Int                 @default(1)
+  title                 String
+  status                String              @default("provisioning")
+  provider              String?
+  model                 String?
+  capabilitiesJson      String              @default("[]")
+  authorityJson         String              @default("[]")
+  permissionsJson       String              @default("[]")
+  contextScopeJson      String              @default("[]")
+  budgetLimitMicros     BigInt               @default(0)
+  budgetUsedMicros      BigInt               @default(0)
+  temporary             Boolean             @default(true)
+  activatedAt           DateTime?
+  retiredAt             DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  department            MissionDepartment?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  team                  MissionTeam?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  roleDefinition        RoleDefinition      @relation(fields: [roleDefinitionId], references: [id], onDelete: Restrict)
+  manager               AgentInstance?      @relation("AgentReporting", fields: [managerAgentId], references: [id], onDelete: SetNull)
+  directReports         AgentInstance[]     @relation("AgentReporting")
+  staffingRequests      StaffingRequest[]   @relation("StaffingRequester")
+  teamFormationRequests TeamFormationRequest[] @relation("TeamFormationRequester")
+  outgoingDelegations   OrganizationDelegation[] @relation("DelegationFrom")
+  incomingDelegations   OrganizationDelegation[] @relation("DelegationTo")
+  assignments           OrganizationAssignment[]
+  workItems             WorkItem[]
+
+  @@unique([missionOrganizationId, roleDefinitionId, ordinal])
+  @@index([missionOrganizationId, status])
+  @@index([departmentId, status])
+  @@index([teamId, status])
+  @@index([managerAgentId, status])
+}
+
+model StaffingRequest {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  departmentId          String
+  teamId                String
+  requestedByAgentId    String
+  requestKey            String
+  requestJson           String
+  requestHash           String
+  scopeHash             String
+  riskLevel             String
+  status                String              @default("pending")
+  reasonCodesJson       String              @default("[]")
+  expectedCostMicros    BigInt
+  reusableAgentId       String?
+  fulfilledAgentId      String?
+  resolution            String?
+  rationale             String?
+  decidedBy             String?
+  decidedAt             DateTime?
+  fulfilledAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  department            MissionDepartment   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  team                  MissionTeam         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  requestedByAgent      AgentInstance       @relation("StaffingRequester", fields: [requestedByAgentId], references: [id], onDelete: Restrict)
+
+  @@unique([missionOrganizationId, requestKey])
+  @@index([missionOrganizationId, status])
+  @@index([teamId, status])
+  @@index([requestedByAgentId, status])
+}
+
+model TeamFormationRequest {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  departmentId          String
+  requestedByAgentId    String
+  requestKey            String
+  requestJson           String
+  requestHash           String
+  scopeHash             String
+  riskLevel             String
+  status                String              @default("pending")
+  reasonCodesJson       String              @default("[]")
+  expectedCostMicros    BigInt
+  formedTeamId          String?
+  resolution            String?
+  rationale             String?
+  decidedBy             String?
+  decidedAt             DateTime?
+  fulfilledAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  department            MissionDepartment   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  requestedByAgent      AgentInstance       @relation("TeamFormationRequester", fields: [requestedByAgentId], references: [id], onDelete: Restrict)
+
+  @@unique([missionOrganizationId, requestKey])
+  @@index([missionOrganizationId, status])
+  @@index([departmentId, status])
+}
+
+model OrganizationDelegation {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  fromAgentId           String
+  toAgentId             String?
+  kind                  String
+  scopeJson             String
+  scopeHash             String
+  authorityJson         String
+  budgetLimitMicros     BigInt               @default(0)
+  status                String              @default("active")
+  expiresAt             DateTime?
+  revokedAt             DateTime?
+  createdAt             DateTime            @default(now())
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  fromAgent             AgentInstance       @relation("DelegationFrom", fields: [fromAgentId], references: [id], onDelete: Restrict)
+  toAgent               AgentInstance?      @relation("DelegationTo", fields: [toAgentId], references: [id], onDelete: SetNull)
+
+  @@index([missionOrganizationId, status])
+  @@index([fromAgentId, status])
+  @@index([toAgentId, status])
+}
+
+model OrganizationRuntimeEvent {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  sequence              Int
+  type                  String
+  actor                 String
+  message               String
+  payloadJson           String              @default("{}")
+  payloadHash           String
+  createdAt             DateTime            @default(now())
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+
+  @@unique([missionOrganizationId, sequence])
+  @@index([missionOrganizationId, type, createdAt])
+}
+
+model TeamGraphBinding {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  departmentId          String?
+  teamId                String?
+  scopeKey              String
+  scopeType             String
+  parentScopeKey        String?
+  graphSpecKey          String
+  objective             String
+  requiredArtifactTypes String              @default("[]")
+  status                String              @default("planned")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  department            MissionDepartment?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  team                  MissionTeam?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([missionOrganizationId, scopeKey])
+  @@index([departmentId, status])
+  @@index([teamId, status])
+}
+
+model OrganizationAssignment {
+  id                    String              @id @default(cuid())
+  missionOrganizationId String
+  departmentId          String
+  teamId                String
+  agentInstanceId       String?
+  workItemId            String?             @unique
+  graphNodeRunId        String?
+  taskKey               String
+  objective             String
+  acceptanceCriteria    String              @default("[]")
+  status                String              @default("planned")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  missionOrganization   MissionOrganization @relation(fields: [missionOrganizationId], references: [id], onDelete: Cascade)
+  department            MissionDepartment   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  team                  MissionTeam         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  agentInstance         AgentInstance?      @relation(fields: [agentInstanceId], references: [id], onDelete: SetNull)
+  workItem              WorkItem?           @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  graphNodeRun          GraphNodeRun?        @relation(fields: [graphNodeRunId], references: [id], onDelete: SetNull)
+
+  @@unique([missionOrganizationId, taskKey])
+  @@index([teamId, status])
+  @@index([agentInstanceId, status])
+  @@index([graphNodeRunId, status])
+}
+
+model DelegationPolicy {
+  id             String       @id @default(cuid())
+  organizationId String
+  actionKind     String
+  riskLevel      String
+  authority      String
+  autoExecute    Boolean      @default(false)
+  maxCostUsd     Float        @default(0)
+  maxAttempts    Int          @default(2)
+  constraints    String       @default("{}")
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, actionKind])
+  @@index([organizationId, active])
+}

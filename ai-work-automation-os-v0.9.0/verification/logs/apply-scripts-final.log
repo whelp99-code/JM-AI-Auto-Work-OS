@@ -1,0 +1,11 @@
+Applied AI Work Automation OS v0.9.0 to: /mnt/data/v090-apply-empty-final
+Source backup: /mnt/data/v090-apply-empty-final/.aiwa-backups/source-before-v0.9.0-20260730T180018Z.txt
+Preserved: .git, .env, .env.local, data, backups, artifacts
+Database unchanged. Run install-local.sh or the target DB migration commands next.
+AI Work Automation OS v0.9.0 is already applied: /mnt/data/v090-apply-empty-final
+Applied AI Work Automation OS v0.9.0 to: /mnt/data/v090-apply-v080-final
+Source backup: /mnt/data/v090-apply-v080-final/.aiwa-backups/source-before-v0.9.0-20260730T180018Z.tar.gz
+Preserved: .git, .env, .env.local, data, backups, artifacts
+Database unchanged. Run install-local.sh or the target DB migration commands next.
+AI Work Automation OS v0.9.0 is already applied: /mnt/data/v090-apply-v080-final
+APPLY SCRIPT VERIFICATION PASS

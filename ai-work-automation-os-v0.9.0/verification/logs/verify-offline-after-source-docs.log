@@ -1,0 +1,320 @@
+TAP version 13
+# (node:19263) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: v0.8.0 database is atomically rebuilt and preserves core records
+ok 1 - v0.8.0 database is atomically rebuilt and preserves core records
+  ---
+  duration_ms: 169.575902
+  type: 'test'
+  ...
+# Subtest: team and manager relations are restored independently of legacy row order
+ok 2 - team and manager relations are restored independently of legacy row order
+  ---
+  duration_ms: 231.08444
+  type: 'test'
+  ...
+# Subtest: dry-run and unsupported-schema failures never modify the source database
+ok 3 - dry-run and unsupported-schema failures never modify the source database
+  ---
+  duration_ms: 126.468124
+  type: 'test'
+  ...
+# Subtest: already rebuilt database is a safe no-op
+ok 4 - already rebuilt database is a safe no-op
+  ---
+  duration_ms: 217.508396
+  type: 'test'
+  ...
+# Subtest: explicit rollback restores the v0.8.0 sidecar and keeps a v0.9.0 safety copy
+ok 5 - explicit rollback restores the v0.8.0 sidecar and keeps a v0.9.0 safety copy
+  ---
+  duration_ms: 185.149324
+  type: 'test'
+  ...
+# (node:19264) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: v0.9.0 canonical schema has exactly 18 physical tables
+ok 6 - v0.9.0 canonical schema has exactly 18 physical tables
+  ---
+  duration_ms: 5.024624
+  type: 'test'
+  ...
+# Subtest: core tables cover organization, mission, workflow, council, quality, delivery and ops
+ok 7 - core tables cover organization, mission, workflow, council, quality, delivery and ops
+  ---
+  duration_ms: 0.995801
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 994.724597
+TAP version 13
+# Subtest: product definition remains work automation, not ProofGraph
+ok 1 - product definition remains work automation, not ProofGraph
+  ---
+  duration_ms: 1.093105
+  type: 'test'
+  ...
+# Subtest: mission classification selects domain organization templates
+ok 2 - mission classification selects domain organization templates
+  ---
+  duration_ms: 0.476613
+  type: 'test'
+  ...
+# Subtest: risk classification fails closed for irreversible actions
+ok 3 - risk classification fails closed for irreversible actions
+  ---
+  duration_ms: 0.47792
+  type: 'test'
+  ...
+# Subtest: mission input validates budget and objective
+ok 4 - mission input validates budget and objective
+  ---
+  duration_ms: 0.615735
+  type: 'test'
+  ...
+# Subtest: product definition remains AI Work Automation OS and separates ProofGraph
+ok 5 - product definition remains AI Work Automation OS and separates ProofGraph
+  ---
+  duration_ms: 1.054437
+  type: 'test'
+  ...
+# Subtest: mission type and risk are inferred from business objective
+ok 6 - mission type and risk are inferred from business objective
+  ---
+  duration_ms: 0.509992
+  type: 'test'
+  ...
+# Subtest: organization templates always separate producer and verifier
+ok 7 - organization templates always separate producer and verifier
+  ---
+  duration_ms: 1.5457
+  type: 'test'
+  ...
+# Subtest: RED route inserts human approval and never skips verification
+ok 8 - RED route inserts human approval and never skips verification
+  ---
+  duration_ms: 0.28697
+  type: 'test'
+  ...
+# Subtest: mission normalization bounds budget and cleans criteria
+ok 9 - mission normalization bounds budget and cleans criteria
+  ---
+  duration_ms: 1.352605
+  type: 'test'
+  ...
+# Subtest: approval scope changes whenever target arguments change
+ok 10 - approval scope changes whenever target arguments change
+  ---
+  duration_ms: 0.936012
+  type: 'test'
+  ...
+# Subtest: high-risk workflow cannot be routed without approval
+ok 11 - high-risk workflow cannot be routed without approval
+  ---
+  duration_ms: 0.962353
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 63.737461
+PASS schema parity: 18 tables, 297 columns
+PASS package_name
+PASS package_version
+PASS local_dev_bind
+PASS local_start_bind
+PASS no_active_supabase_dependency
+PASS script_db:rebuild
+PASS script_db:rebuild:dry-run
+PASS script_db:rollback:v0.8
+PASS script_db:doctor
+PASS script_db:backup
+PASS script_local:install
+PASS script_local:verify
+PASS script_verify:v0.9.0
+PASS prisma_exact_18_models
+PASS prisma_exact_18_maps
+PASS sqlite_primary_schema
+PASS schema_version_090
+PASS legacy_schema_preserved
+PASS future_postgres_isolated
+PASS no_dual_core_schema
+PASS core_tables_constant
+PASS sql_exact_18_create_tables
+PASS foreign_keys_enabled
+PASS sql_table_workspace
+PASS sql_table_org_unit
+PASS sql_table_role
+PASS sql_table_agent
+PASS sql_table_mission
+PASS sql_table_mission_run
+PASS sql_table_work_item
+PASS sql_table_workflow_step
+PASS sql_table_workflow_transition
+PASS sql_table_review
+PASS sql_table_approval
+PASS sql_table_council_session
+PASS sql_table_council_message
+PASS sql_table_decision_record
+PASS sql_table_artifact
+PASS sql_table_external_effect
+PASS sql_table_event_log
+PASS sql_table_file_asset
+PASS index_idx_mission_status
+PASS index_idx_run_status
+PASS index_idx_org_unit_scope
+PASS index_idx_work_item_run
+PASS index_idx_step_run
+PASS index_idx_review_run
+PASS index_idx_approval_run
+PASS index_idx_event_run
+PASS migration_detects_080
+PASS migration_rejects_unknown
+PASS migration_dry_run
+PASS migration_backup_first
+PASS migration_source_read_only
+PASS migration_temp_db
+PASS migration_transaction
+PASS migration_validates_fk
+PASS migration_validates_before_swap
+PASS migration_atomic_swap
+PASS migration_swap_rollback
+PASS migration_two_pass_team
+PASS migration_two_pass_manager
+PASS migration_report
+PASS rollback_confirmation
+PASS rollback_safety_copy
+PASS service_mission-service.ts
+PASS service_organization-service.ts
+PASS service_workflow-service.ts
+PASS service_approval-service.ts
+PASS service_council-service.ts
+PASS service_workspace-service.ts
+PASS service_database-service.ts
+PASS service_event-service.ts
+PASS service_local-security.ts
+PASS obsolete_removed_runtime-service.ts
+PASS obsolete_removed_read-model.ts
+PASS obsolete_removed_local-auth.ts
+PASS obsolete_removed_database-health.ts
+PASS obsolete_removed_api.ts
+PASS workflow_org_provisioning
+PASS workflow_policy_driven
+PASS workflow_human_approval
+PASS workflow_independent_review
+PASS workflow_final_gate_after_review
+PASS workflow_truthful_simulation
+PASS workflow_external_effect_ledger
+PASS workflow_no_external_execution
+PASS workflow_retry_bound
+PASS run_idempotency
+PASS approval_cas
+PASS approval_scope_binding
+PASS approval_rejection_blocks
+PASS approval_resume_explicit
+PASS organization_has_manager
+PASS organization_has_verifier
+PASS council_decision_support
+PASS council_no_effect_execution
+PASS workspace_workItems
+PASS workspace_steps
+PASS workspace_transitions
+PASS workspace_reviews
+PASS workspace_approvals
+PASS workspace_councils
+PASS workspace_decisions
+PASS workspace_artifacts
+PASS workspace_effects
+PASS workspace_events
+PASS local_loopback_host
+PASS local_forwarded_ip_guard
+PASS product_definition_work_automation
+PASS proofgraph_separated
+PASS budget_bound
+PASS action_bound
+PASS risk_fail_closed
+PASS route_src/app/api/missions/route.ts
+PASS route_src/app/api/missions/[id]/runs/route.ts
+PASS route_src/app/api/runs/[id]/workspace/route.ts
+PASS route_src/app/api/runs/[id]/execute/route.ts
+PASS route_src/app/api/runs/[id]/council/route.ts
+PASS route_src/app/api/approvals/route.ts
+PASS route_src/app/api/approvals/[id]/route.ts
+PASS route_src/app/api/system/database/route.ts
+PASS no_duplicate_dynamic_mission_routes
+PASS no_duplicate_dynamic_run_routes
+PASS no_duplicate_dynamic_approval_routes
+PASS ui_command-center.tsx
+PASS ui_mission-workspace.tsx
+PASS ui_approvals-center.tsx
+PASS ui_council-center.tsx
+PASS ui_database-settings.tsx
+PASS ui_version_visible
+PASS ui_db_18_visible
+PASS ui_no_dangerous_html
+PASS ui_integrated_workflow
+PASS no_active_supabase_import
+PASS no_proofgraph_runtime_product
+PASS no_phase_user_facing
+RESULT 137/137 passed
+PASS A01_scope_target_mutation
+PASS A02_scope_action_mutation
+PASS A03_scope_risk_mutation
+PASS A_route_verify_GREEN
+PASS A_route_final_gate_GREEN
+PASS A_route_verify_YELLOW
+PASS A_route_final_gate_YELLOW
+PASS A_route_verify_RED
+PASS A_route_final_gate_RED
+PASS A10_red_has_approval
+PASS A11_green_no_forced_approval
+PASS A12_source_opened_read_only
+PASS A13_backup_precedes_new_schema
+PASS A14_validation_precedes_swap
+PASS A15_swap_restores_original
+PASS A16_temp_removed_on_migration_error
+PASS A17_rollback_requires_confirmation
+PASS A18_rollback_keeps_safety_copy
+PASS A19_exact_18_models
+PASS A20_no_core_shadow_database
+PASS A21_single_runtime_database_url
+PASS A22_approval_cas
+PASS A23_scope_recomputed_server_side
+PASS A24_expired_approval_rejected
+PASS A25_rejection_blocks_mission
+PASS A26_external_effect_not_executed
+PASS A27_external_effect_idempotency
+PASS A28_verifier_is_separate_agent
+PASS A29_verification_failure_stops
+PASS A30_truthful_simulated_completion
+PASS A31_no_live_tool_execution
+PASS A32_attempt_limit
+PASS A33_host_loopback_only
+PASS A34_forwarded_host_checked
+PASS A35_forwarded_for_checked
+PASS A36_real_ip_checked
+PASS A37_no_token_as_network_substitute
+PASS A38_no_html_injection
+PASS A39_human_approval_controls
+PASS A40_scope_hash_sent
+PASS A41_artifact_rendered_as_pre
+PASS A42_unknown_schema_rejected
+PASS A43_unknown_schema_unchanged
+PASS A44_no_duplicate_mission_param
+PASS A45_no_duplicate_run_param
+PASS A46_no_duplicate_approval_param
+RESULT 46/46 passed
+PASS TypeScript/TSX syntax: 45/45
+PASS v0.9.0 offline verification

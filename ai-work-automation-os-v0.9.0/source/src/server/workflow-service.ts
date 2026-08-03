@@ -11,16 +11,28 @@ import { ensureMissionCouncil } from "./council-service";
 
 type Tx = Prisma.TransactionClient;
 
+class WorkflowVerificationError extends Error {
+  constructor(readonly failure: {
+    workspaceId: string; missionId: string; runId: string; workItemId: string;
+    workKey: string; orgUnitId: string | null; verifierAgentId: string | null; verifierRoleKey: string;
+    attempt: number; reviewType: string; criteriaJson: string; evidenceJson: string; failureJson: string; summary: string;
+  }) {
+    super(`verification_failed:${failure.workKey}`);
+    this.name = "WorkflowVerificationError";
+  }
+}
+
 async function ensureStep(tx: Tx, input: {
   missionRunId: string; workItemId?: string | null; orgUnitId?: string | null; agentId?: string | null;
-  key: string; stepType: string; roleKey?: string | null; status?: string; input?: unknown;
+  key: string; stepType: string; roleKey?: string | null; status?: string; input?: unknown; attempt?: number;
 }) {
-  const existing = await tx.workflowStep.findFirst({ where: { missionRunId: input.missionRunId, key: input.key, instanceKey: "main", attempt: 1 } });
+  const attempt = input.attempt ?? 1;
+  const existing = await tx.workflowStep.findFirst({ where: { missionRunId: input.missionRunId, key: input.key, instanceKey: "main", attempt } });
   if (existing) return existing;
   return tx.workflowStep.create({ data: {
     id: newId("step"), missionRunId: input.missionRunId, workItemId: input.workItemId ?? null,
     orgUnitId: input.orgUnitId ?? null, agentId: input.agentId ?? null,
-    key: input.key, instanceKey: "main", stepType: input.stepType, roleKey: input.roleKey ?? null,
+    key: input.key, instanceKey: "main", attempt, stepType: input.stepType, roleKey: input.roleKey ?? null,
     status: input.status ?? "pending", inputJson: stringifyJson(input.input ?? {})
   }});
 }
@@ -67,13 +79,66 @@ async function basicStep(tx: Tx, context: { workspaceId: string; missionId: stri
   return step;
 }
 
+async function recoverVerificationFailure(error: WorkflowVerificationError) {
+  const { failure } = error;
+  await prisma.$transaction(async (tx) => {
+    const verifyKey = `verify:${failure.workKey}`;
+    const verifyStep = await ensureStep(tx, {
+      missionRunId: failure.runId, workItemId: failure.workItemId, orgUnitId: failure.orgUnitId,
+      agentId: failure.verifierAgentId, key: verifyKey, stepType: "verification", roleKey: failure.verifierRoleKey, attempt: failure.attempt
+    });
+    const reviewData = {
+      workflowStepId: verifyStep.id, reviewerAgentId: failure.verifierAgentId,
+      status: "completed", verdict: "failed", severity: "high", score: 0, confidence: 0.98,
+      criteriaJson: failure.criteriaJson, evidenceJson: failure.evidenceJson, failureJson: failure.failureJson,
+      summary: failure.summary, completedAt: new Date()
+    };
+    let review = await tx.review.findFirst({ where: { missionRunId: failure.runId, workItemId: failure.workItemId, reviewType: failure.reviewType } });
+    if (review) review = await tx.review.update({ where: { id: review.id }, data: reviewData });
+    else review = await tx.review.create({ data: {
+      id: newId("review"), missionId: failure.missionId, missionRunId: failure.runId, workItemId: failure.workItemId,
+      reviewType: failure.reviewType, ...reviewData
+    } });
+    await completeStep(tx, verifyStep.id, { reviewId: review.id, verdict: "failed", failureJson: failure.failureJson }, "failed");
+    await recordStepEvent(tx, {
+      workspaceId: failure.workspaceId, missionId: failure.missionId, runId: failure.runId,
+      stepId: verifyStep.id, key: verifyKey, status: "failed", data: { reviewId: review.id, failureJson: failure.failureJson }
+    });
+    await tx.missionRun.update({ where: { id: failure.runId }, data: {
+      status: "failed", errorCode: "verification_failed", errorMessage: error.message, completedAt: new Date()
+    } });
+    await tx.mission.update({ where: { id: failure.missionId }, data: { status: "failed", currentStage: "failed" } });
+  });
+}
+
 export async function executeMissionRun(missionRunId: string) {
   const initial = await prisma.missionRun.findUnique({ where: { id: missionRunId }, include: { mission: true } });
   if (!initial) throw new Error("not_found");
-  if (["completed", "simulated", "failed", "blocked", "cancelled"].includes(initial.status)) return initial;
-  if (initial.attemptCount >= initial.maxAttempts && initial.status !== "waiting_approval") {
-    await prisma.missionRun.update({ where: { id: missionRunId }, data: { status: "failed", errorCode: "max_attempts_exceeded", errorMessage: "Workflow retry limit exceeded", completedAt: new Date() } });
-    return prisma.missionRun.findUniqueOrThrow({ where: { id: missionRunId } });
+  if (["completed", "simulated", "blocked", "cancelled", "running"].includes(initial.status)) return initial;
+  if (initial.status === "failed") throw new Error("invalid_run_state:failed");
+  if (!["queued", "waiting_approval"].includes(initial.status)) throw new Error(`invalid_run_state:${initial.status}`);
+  if (initial.status === "waiting_approval") {
+    const approved = await prisma.approval.findFirst({ where: { missionRunId, status: "approved" } });
+    if (!approved) throw new Error("invalid_run_state:waiting_approval");
+  }
+  const claimed = await prisma.missionRun.updateMany({
+    where: {
+      id: missionRunId, status: initial.status, attemptCount: initial.attemptCount,
+      OR: [
+        { status: "waiting_approval" },
+        { status: "queued", maxAttempts: { gt: initial.attemptCount } }
+      ]
+    },
+    data: {
+      status: "running", startedAt: initial.startedAt ?? new Date(), attemptCount: { increment: 1 },
+      errorCode: null, errorMessage: null, completedAt: null
+    }
+  });
+  if (claimed.count !== 1) {
+    const latest = await prisma.missionRun.findUniqueOrThrow({ where: { id: missionRunId } });
+    if (["completed", "simulated", "running"].includes(latest.status)) return latest;
+    if (latest.status === "failed" && latest.attemptCount >= latest.maxAttempts) throw new Error("max_attempts_exceeded");
+    throw new Error(`execution_conflict:${latest.status}`);
   }
   await provisionMissionOrganization(missionRunId);
   const policy = workflowPolicy({
@@ -82,7 +147,6 @@ export async function executeMissionRun(missionRunId: string) {
     requestedActions: parseJson<{ requestedActions?: string[] }>(initial.mission.inputJson, {}).requestedActions
   });
   await prisma.missionRun.update({ where: { id: missionRunId }, data: {
-    status: "running", startedAt: initial.startedAt ?? new Date(), attemptCount: { increment: 1 },
     stateJson: stringifyJson({ policy, path: workflowPath(policy), schema: "workflow-state.v0.9.0" })
   }});
   await prisma.mission.update({ where: { id: initial.missionId }, data: { status: "running", currentStage: "workflow" } });
@@ -175,12 +239,14 @@ export async function executeMissionRun(missionRunId: string) {
       previous = step.id;
       const verifyKey = `verify:${work.key}`;
       const verifier = await tx.agent.findFirst({ where: { missionRunId, orgUnitId: work.orgUnitId, role: { isVerifier: true }, status: "active" }, include: { role: true } });
-      const verifyStep = await ensureStep(tx, { missionRunId, workItemId: work.id, orgUnitId: work.orgUnitId, agentId: verifier?.id ?? null, key: verifyKey, stepType: "verification", roleKey: verifier?.role.key ?? "independent-verifier" });
+      const originalReview = await tx.review.findFirst({ where: { missionRunId, workItemId: work.id, reviewType: "independent" } });
+      const reviewType = originalReview ? `independent:attempt-${run.attemptCount}` : "independent";
+      const verifyStep = await ensureStep(tx, { missionRunId, workItemId: work.id, orgUnitId: work.orgUnitId, agentId: verifier?.id ?? null, key: verifyKey, stepType: "verification", roleKey: verifier?.role.key ?? "independent-verifier", attempt: run.attemptCount });
       await linkStep(tx, missionRunId, previous, verifyStep.id, "requires_verification", { workItemId: work.id });
       const refreshed = await tx.workItem.findUniqueOrThrow({ where: { id: work.id } });
       const output = parseJson<{ markdown?: string }>(refreshed.outputJson, {});
       const passed = Boolean(output.markdown?.trim());
-      let review = await tx.review.findFirst({ where: { missionRunId, workItemId: work.id, reviewType: "independent" } });
+      let review = await tx.review.findFirst({ where: { missionRunId, workItemId: work.id, reviewType } });
       const reviewData = {
         status: "completed", verdict: passed ? "passed" : "failed", severity: passed ? "info" : "high",
         score: passed ? 1 : 0, confidence: passed ? 0.92 : 0.98,
@@ -189,10 +255,16 @@ export async function executeMissionRun(missionRunId: string) {
         summary: passed ? "요구사항과 결과물 존재 여부를 독립적으로 확인했습니다." : "결과물이 없어 재실행이 필요합니다.", completedAt: new Date()
       };
       if (review) review = await tx.review.update({ where: { id: review.id }, data: reviewData });
-      else review = await tx.review.create({ data: { id: newId("review"), missionId: run.missionId, missionRunId, workItemId: work.id, workflowStepId: verifyStep.id, reviewerAgentId: verifier?.id ?? null, reviewType: "independent", ...reviewData } });
+      else review = await tx.review.create({ data: { id: newId("review"), missionId: run.missionId, missionRunId, workItemId: work.id, workflowStepId: verifyStep.id, reviewerAgentId: verifier?.id ?? null, reviewType, ...reviewData } });
       await completeStep(tx, verifyStep.id, { reviewId: review.id, verdict: review.verdict }, passed ? "completed" : "failed");
       await recordStepEvent(tx, { ...context, stepId: verifyStep.id, key: verifyKey, status: passed ? "completed" : "failed", data: { reviewId: review.id } });
-      if (!passed) throw new Error(`verification_failed:${work.key}`);
+      if (!passed) throw new WorkflowVerificationError({
+        workspaceId: context.workspaceId, missionId: run.missionId, runId: run.id, workItemId: work.id,
+        workKey: work.key, orgUnitId: work.orgUnitId, verifierAgentId: verifier?.id ?? null,
+        verifierRoleKey: verifier?.role.key ?? "independent-verifier", attempt: run.attemptCount, reviewType, criteriaJson: refreshed.criteriaJson,
+        evidenceJson: refreshed.evidenceJson,
+        failureJson: reviewData.failureJson, summary: reviewData.summary
+      });
       previous = verifyStep.id;
     }
     const councilDecision = await tx.decisionRecord.findFirst({ where: { missionRunId, sourceType: "council" }, orderBy: { createdAt: "desc" } });
@@ -222,9 +294,17 @@ export async function executeMissionRun(missionRunId: string) {
     await tx.mission.update({ where: { id: run.missionId }, data: {
       status: "simulated", currentStage: "completed", spentMicros: run.mission.spentMicros, completedAt: new Date()
     }});
-    await appendEvent(tx, { ...context, sourceType: "mission_run", sourceId: missionRunId, eventType: "mission.completed", message: "검증된 최종 산출물을 생성했습니다.", data: { artifactId: artifact.id, evidenceMode: "synthetic" } });
+    await appendEvent(tx, {
+      workspaceId: context.workspaceId, missionId: context.missionId, missionRunId,
+      sourceType: "mission_run", sourceId: missionRunId, eventType: "mission.completed",
+      message: "검증된 최종 산출물을 생성했습니다.", data: { artifactId: artifact.id, evidenceMode: "synthetic" }
+    });
     });
   } catch (error) {
+    if (error instanceof WorkflowVerificationError) {
+      await recoverVerificationFailure(error);
+      throw error;
+    }
     const message = error instanceof Error ? error.message : "workflow_failed";
     const failed = await prisma.missionRun.update({ where: { id: missionRunId }, data: {
       status: "failed", errorCode: message.split(":")[0] || "workflow_failed", errorMessage: message, completedAt: new Date()

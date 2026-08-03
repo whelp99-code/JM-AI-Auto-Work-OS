@@ -1,5 +1,7 @@
 # AI Work Automation OS v0.9.0
 
+> **SUPERSEDED — 2026-08-03.** Replacement: **JM-AI Master Worker**. 신규 설치와 기능 개발은 동결되었습니다. 수신 또는 삭제가 완료되었다는 뜻은 아닙니다.
+
 Local-First 단일 사용자 업무 자동화 운영체제입니다.
 
 사용자가 자연어 업무 목표를 입력하면 시스템이 업무 유형·위험도·예산을 해석하고, 필요한 AI 조직과 역할을 구성한 뒤 상태 기반 Workflow로 조사·계획·실행·독립 검증·승인·합성·최종 게이트를 수행합니다.
@@ -25,7 +27,7 @@ Local-First 단일 사용자 업무 자동화 운영체제입니다.
 ```bash
 cp .env.example .env
 cp .env.local.example .env.local
-npm install
+npm ci
 npm run db:rebuild
 npm run db:seed
 npm run db:doctor
@@ -60,7 +62,7 @@ npm run db:rollback:v0.8
 
 ## 검증
 
-Dependency 없이 가능한 안전 검증:
+의존성을 `npm ci`로 설치한 뒤 실행하는 fail-closed 검증:
 
 ```bash
 npm run verify:v0.9.0:offline

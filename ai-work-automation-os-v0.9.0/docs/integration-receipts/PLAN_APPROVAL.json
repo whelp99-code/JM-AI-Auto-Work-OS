@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "jm-ai-integration-gate.v1",
+  "gateId": "MANUAL-GATE-00",
+  "decision": "APPROVED",
+  "issuer": {
+    "role": "Fable5",
+    "id": "fable5-master-command"
+  },
+  "provenance": {
+    "provider": "master-channel",
+    "sourceId": "MASTER_REVIEW_ROUND1",
+    "messageId": "fable5-round1-2026-08-03",
+    "contentSha256": "db4d37e83de1208621c4ab808ae7949592fd10dd5d00a21dee5b2938934d6785"
+  },
+  "issuedAt": "2026-08-03T00:00:00Z",
+  "expiresAt": null,
+  "plan": {
+    "path": "ai-work-automation-os-v0.9.0/docs/INTEGRATION_EXEC_PLAN_V1.md",
+    "sha256": "da9d521491f36dd4d4a6698f03955dc89b46c2d8a19ab097c54c0d129233d01a"
+  },
+  "repository": {
+    "realpath": "/Volumes/DevSpace/Playground/JM AI-OS Pack/JM-AI Auto Work OS",
+    "head": "51253b4d630af0c94b56825e664ba78594d9f964"
+  },
+  "inputs": {},
+  "approvalSource": {
+    "path": "/Volumes/DevSpace/Playground/JM AI-OS Pack/ops/MASTER_REVIEW_ROUND1.md",
+    "sha256": "db4d37e83de1208621c4ab808ae7949592fd10dd5d00a21dee5b2938934d6785"
+  },
+  "notes": "Normalized from the 2026-08-03 Fable5 master review approval."
+}

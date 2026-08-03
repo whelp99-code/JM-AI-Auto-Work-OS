@@ -1,5 +1,7 @@
 # JM-AI Auto Work OS
 
+> **SUPERSEDED — 2026-08-03.** Replacement: **JM-AI Master Worker**. New installation and feature development are frozen. This notice does not claim that migration or deletion is complete.
+
 Public import of the related source and planning packages held in this workspace.
 
 - AI Work Automation OS v0.9.0: `ai-work-automation-os-v0.9.0/`

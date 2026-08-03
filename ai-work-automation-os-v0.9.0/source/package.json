@@ -8,7 +8,7 @@
     "start": "next start -H 127.0.0.1",
     "build": "prisma generate && next build",
     "check": "tsc --noEmit",
-    "test": "DATABASE_URL=\"file:../data/test-v0.9.0.db\" node scripts/db-v090-reset.mjs --yes && DATABASE_URL=\"file:../data/test-v0.9.0.db\" prisma generate && DATABASE_URL=\"file:../data/test-v0.9.0.db\" prisma db push --skip-generate && DATABASE_URL=\"file:../data/test-v0.9.0.db\" node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test": "bash scripts/run-runtime-tests-v090.sh",
     "db:rebuild": "node scripts/db-v090-migrate.mjs",
     "db:rebuild:dry-run": "node scripts/db-v090-migrate.mjs --dry-run",
     "db:rollback:v0.8": "node scripts/db-v090-rollback.mjs --yes",

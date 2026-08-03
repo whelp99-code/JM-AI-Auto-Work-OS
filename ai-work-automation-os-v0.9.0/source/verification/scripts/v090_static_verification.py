@@ -85,7 +85,7 @@ check("workflow_final_gate_after_review", pos(workflow, 'reviewType: "independen
 check("workflow_truthful_simulation", 'status: "simulated"' in workflow and 'evidenceMode: "synthetic"' in workflow)
 check("workflow_external_effect_ledger", "externalEffect.create" in workflow and 'status: "approval_required"' in workflow)
 check("workflow_no_external_execution", not any(token in workflow for token in ["fetch(", "spawn(", "execFile(", "child_process", "provider.publish", "provider.deploy"]))
-check("workflow_retry_bound", "initial.attemptCount >= initial.maxAttempts" in workflow)
+check("workflow_retry_bound", 'initial.status === "failed"' in workflow and "maxAttempts: { gt: initial.attemptCount }" in workflow and "const claimed = await prisma.missionRun.updateMany" in workflow)
 check("run_idempotency", "missionId_idempotencyKey" in text("src/server/mission-service.ts"))
 check("approval_cas", "updateMany" in approval and 'status: "pending"' in approval and "claimed.count !== 1" in approval)
 check("approval_scope_binding", "approvalScopeHash(request)" in approval and "approval_scope_mismatch" in approval)

@@ -62,7 +62,24 @@ check("A28_verifier_is_separate_agent", 'role: { isVerifier: true }' in workflow
 check("A29_verification_failure_stops", "verification_failed" in workflow)
 check("A30_truthful_simulated_completion", 'status: "simulated"' in workflow and 'evidenceMode: "synthetic"' in workflow)
 check("A31_no_live_tool_execution", not any(token in workflow for token in ["fetch(", "child_process", "spawn(", "execFile(", "deploy(", "publish(", "payment("]))
-check("A32_attempt_limit", "initial.attemptCount >= initial.maxAttempts" in workflow)
+check("A32_attempt_limit", "maxAttempts: { gt: initial.attemptCount }" in workflow)
+
+# The offline verifier is fail-closed and only accepts the package-local compiler.
+offline_verifier = text("verify-offline.sh")
+pure_verifier = text("verification/scripts/v090_pure_tests.mjs")
+syntax_verifier = text("verification/scripts/v090_ts_syntax.mjs")
+check("A32a_no_fixed_nvm_compiler", "/opt/nvm" not in offline_verifier + pure_verifier + syntax_verifier)
+check("A32b_no_compiler_skip", "SKIP" not in offline_verifier + pure_verifier + syntax_verifier)
+check("A32c_local_compiler_fail_closed", "AIWA_TSC_BIN" in offline_verifier and "TypeScript compiler unavailable" in offline_verifier and "exit 1" in offline_verifier)
+check("A32d_fileurl_path_resolution", "fileURLToPath" in pure_verifier and "fileURLToPath" in syntax_verifier)
+check("A32e_failed_review_recovery_transaction", "class WorkflowVerificationError" in workflow and "recoverVerificationFailure" in workflow and "await prisma.$transaction" in workflow)
+check("A32f_failed_review_recovery_evidence", 'verdict: "failed"' in workflow and "failureJson: failure.failureJson" in workflow and 'status: "failed"' in workflow)
+mission_service = text("src/server/mission-service.ts")
+check("A32g_retry_cas_single_winner", "updateMany" in mission_service and 'status: "failed"' in mission_service and "attemptCount: run.attemptCount" in mission_service and "claimed.count === 1" in mission_service)
+check("A32h_retry_max_and_state_rejected", "max_attempts_exceeded" in mission_service and "invalid_run_state" in mission_service and "retry_conflict" in mission_service)
+check("A32i_retry_preserves_failed_evidence", "reviewType = originalReview" in workflow and "independent:attempt-${run.attemptCount}" in workflow and "attempt: run.attemptCount" in workflow)
+check("A32j_direct_failed_executor_rejected", 'initial.status === "failed"' in workflow and 'invalid_run_state:failed' in workflow)
+check("A32k_executor_cas_claim", "const claimed = await prisma.missionRun.updateMany" in workflow and "maxAttempts: { gt: initial.attemptCount }" in workflow and "execution_conflict" in workflow)
 
 # Local trust boundary cannot be bypassed by ordinary proxy headers.
 check("A33_host_loopback_only", "LOOPBACK_HOSTS" in security and "local_loopback_required" in security)

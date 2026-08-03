@@ -18,7 +18,7 @@ required=(
   ADVERSARIAL-VERIFICATION.md VERIFICATION-REPORT.md KNOWN-LIMITATIONS.md
   RELEASE-NOTES-v0.9.0.md SECURITY-MODEL.md UI-UX-WORKFLOW-SPEC.md
   PACKAGE-METADATA.json VERSION apply.sh apply-on-v0.8.0.sh install-local.sh
-  verify-target.sh source/MANIFEST.sha256 source/package.json
+  verify-target.sh source/MANIFEST.sha256 source/package.json source/package-lock.json
   patches/v0.8.0-to-v0.9.0.patch
 )
 for file in "${required[@]}"; do
@@ -46,7 +46,9 @@ if (models.length !== 18) throw new Error(`expected 18 Prisma models, got ${mode
 NODE
 
 bash "$ROOT/source/verify-offline.sh" >/dev/null
-! find "$ROOT" -type d -name node_modules -print -quit | grep -q . || { echo "node_modules must not be packaged" >&2; exit 4; }
+for manifest in "$ROOT/source/MANIFEST.sha256" "$ROOT/MANIFEST.sha256"; do
+  ! grep -q '/node_modules/' "$manifest" || { echo "node_modules must not be packaged: $manifest" >&2; exit 4; }
+done
 
 if [[ -f "$ROOT/MANIFEST.sha256" ]]; then
   check_manifest "$ROOT" MANIFEST.sha256 >/dev/null

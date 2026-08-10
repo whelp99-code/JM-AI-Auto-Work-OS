@@ -1,3 +1,0 @@
-#include "Shared.xcconfig"
-SWIFT_COMPILATION_MODE = wholemodule
-ACTION_HUB_PUSH_ENVIRONMENT = production

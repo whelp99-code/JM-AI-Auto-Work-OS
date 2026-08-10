@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
-import ts from "/opt/nvm/versions/node/v22.16.0/lib/node_modules/typescript/lib/typescript.js";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
-const root = resolve(new URL("../..", import.meta.url).pathname);
+const root = fileURLToPath(new URL("../..", import.meta.url));
 const out = mkdtempSync(join(tmpdir(), "aiwa-v090-pure-"));
 const inputs = [
   "src/lib/contracts.ts", "src/lib/templates.ts", "src/lib/workflow-policy.ts", "src/lib/product.ts", "src/lib/ids.ts",

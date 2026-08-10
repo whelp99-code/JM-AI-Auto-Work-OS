@@ -1,5 +1,7 @@
 # AI Work Automation OS v0.9.0 — 먼저 읽기
 
+> **SUPERSEDED — 2026-08-03.** Replacement: **JM-AI Master Worker**. 신규 설치와 기능 개발은 동결되었습니다. 수신 또는 삭제가 완료되었다는 뜻은 아닙니다.
+
 ## 릴리스 목적
 
 v0.9.0은 v0.8.0에서 누적된 44개 DB 모델을 **단일 SQLite의 18개 canonical physical tables**로 직접 리빌드한 Local-First 릴리스입니다.
@@ -95,7 +97,7 @@ data/ai-work-automation.db.v0.8.0
 그 후 대상 저장소에서:
 
 ```bash
-npm install
+npm ci
 npm run db:rebuild:dry-run
 npm run db:rebuild
 npm exec prisma generate

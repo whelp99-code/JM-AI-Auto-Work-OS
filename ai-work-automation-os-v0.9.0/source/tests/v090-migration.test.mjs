@@ -6,9 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
 import { addOutOfOrderOrganizationFixture, createV080Fixture } from "./helpers/create-v080-fixture.mjs";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = fileURLToPath(new URL("..", import.meta.url));
 const hash = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
 
 function migrate(dbPath, ...extra) {

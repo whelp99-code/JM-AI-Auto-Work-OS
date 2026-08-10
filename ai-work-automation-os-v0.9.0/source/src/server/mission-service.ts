@@ -62,5 +62,16 @@ export async function retryMissionRun(runId: string) {
   const run = await prisma.missionRun.findUnique({ where: { id: runId } });
   if (!run) throw new Error("not_found");
   if (["completed", "simulated"].includes(run.status)) return run;
-  return executeMissionRun(run.id);
+  if (run.status === "failed") {
+    if (run.attemptCount >= run.maxAttempts) throw new Error("max_attempts_exceeded");
+    const claimed = await prisma.missionRun.updateMany({
+      where: { id: run.id, status: "failed", attemptCount: run.attemptCount },
+      data: { status: "queued" }
+    });
+    if (claimed.count === 1) return executeMissionRun(run.id);
+    const latest = await prisma.missionRun.findUniqueOrThrow({ where: { id: run.id } });
+    if (["completed", "simulated"].includes(latest.status)) return latest;
+    throw new Error("retry_conflict");
+  }
+  throw new Error(`invalid_run_state:${run.status}`);
 }

@@ -1,17 +1,10 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-async function loadTypeScript() {
-  try { return await import("typescript"); }
-  catch {
-    const fallback = "/opt/nvm/versions/node/v22.16.0/lib/node_modules/typescript/lib/typescript.js";
-    return import(pathToFileURL(fallback).href);
-  }
-}
-const ts = await loadTypeScript();
-const root = resolve(new URL("../..", import.meta.url).pathname);
+const ts = await import("typescript");
+const root = fileURLToPath(new URL("../..", import.meta.url));
 const files = [];
 function walk(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {

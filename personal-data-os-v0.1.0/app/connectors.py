@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 import httpx
 
@@ -36,7 +37,9 @@ class GmailConnector:
                     response.raise_for_status()
                     message = response.json()
                     headers_list = message.get("payload", {}).get("headers", [])
-                    headers_map = {h.get("name", "").casefold(): h.get("value", "") for h in headers_list}
+                    headers_map = {
+                        h.get("name", "").casefold(): h.get("value", "") for h in headers_list
+                    }
                     yield Item(
                         source_type="gmail",
                         source_id=message_id,
@@ -67,7 +70,12 @@ class MicrosoftGraphConnector:
             yield payload
             next_url = payload.get("@odata.nextLink")
 
-    def iter_mail_folder_delta(self, folder_id: str, delta_url: str | None = None, client: httpx.Client | None = None) -> tuple[list[Item], str | None]:
+    def iter_mail_folder_delta(
+        self,
+        folder_id: str,
+        delta_url: str | None = None,
+        client: httpx.Client | None = None,
+    ) -> tuple[list[Item], str | None]:
         own = client is None
         client = client or httpx.Client(timeout=30)
         start = delta_url or f"{self.base_url}/me/mailFolders/{folder_id}/messages/delta"
@@ -79,18 +87,36 @@ class MicrosoftGraphConnector:
                     if "@removed" in message:
                         continue
                     message_id = str(message.get("id", ""))
-                    body = message.get("body", {}).get("content", "") if isinstance(message.get("body"), dict) else ""
-                    items.append(Item("outlook", message_id, f"outlook://message/{message_id}", str(message.get("subject", "")), body))
+                    raw_body = message.get("body")
+                    body = raw_body.get("content", "") if isinstance(raw_body, dict) else ""
+                    items.append(
+                        Item(
+                            "outlook",
+                            message_id,
+                            f"outlook://message/{message_id}",
+                            str(message.get("subject", "")),
+                            body,
+                        )
+                    )
                 last_delta = payload.get("@odata.deltaLink") or last_delta
             return items, last_delta
         finally:
             if own:
                 client.close()
 
-    def iter_calendar_delta(self, start: str, end: str, delta_url: str | None = None, client: httpx.Client | None = None) -> tuple[list[Item], str | None]:
+    def iter_calendar_delta(
+        self,
+        start: str,
+        end: str,
+        delta_url: str | None = None,
+        client: httpx.Client | None = None,
+    ) -> tuple[list[Item], str | None]:
         own = client is None
         client = client or httpx.Client(timeout=30)
-        url = delta_url or f"{self.base_url}/me/calendarView/delta?startDateTime={start}&endDateTime={end}"
+        url = (
+            delta_url
+            or f"{self.base_url}/me/calendarView/delta?startDateTime={start}&endDateTime={end}"
+        )
         items: list[Item] = []
         last_delta: str | None = None
         try:
@@ -99,8 +125,16 @@ class MicrosoftGraphConnector:
                     if "@removed" in event:
                         continue
                     event_id = str(event.get("id", ""))
-                    body = event.get("bodyPreview", "")
-                    items.append(Item("microsoft-calendar", event_id, f"outlook://calendar/{event_id}", str(event.get("subject", "")), body))
+                    body = str(event.get("bodyPreview", ""))
+                    items.append(
+                        Item(
+                            "microsoft-calendar",
+                            event_id,
+                            f"outlook://calendar/{event_id}",
+                            str(event.get("subject", "")),
+                            body,
+                        )
+                    )
                 last_delta = payload.get("@odata.deltaLink") or last_delta
             return items, last_delta
         finally:

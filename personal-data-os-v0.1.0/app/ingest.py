@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import csv
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from app.core import Item, ensure_within_root, read_text_bounded
 
@@ -48,10 +47,7 @@ def import_ai_export(path: Path, provider: str) -> Iterable[Item]:
     provider = provider.casefold()
     if provider not in {"chatgpt", "claude", "gemini"}:
         raise ValueError("unsupported provider")
-    if path.is_dir():
-        files = sorted(path.rglob("*.json"))
-    else:
-        files = [path]
+    files = sorted(path.rglob("*.json")) if path.is_dir() else [path]
     for file_path in files:
         try:
             payload = json.loads(read_text_bounded(file_path, max_bytes=20_000_000))

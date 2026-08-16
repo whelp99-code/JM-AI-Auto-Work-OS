@@ -7,7 +7,7 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
-from app.core import Item
+from app.core import Item, ProjectRule
 
 SCHEMA = """
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS items (
 );
 CREATE INDEX IF NOT EXISTS idx_items_hash ON items(content_hash);
 CREATE INDEX IF NOT EXISTS idx_items_project ON items(project);
-CREATE INDEX IF NOT EXISTS idx_items_fts ON items USING GIN(to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(body,'')));
+CREATE INDEX IF NOT EXISTS idx_items_fts ON items USING GIN(
+  to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(body,''))
+);
 CREATE INDEX IF NOT EXISTS idx_items_title_trgm ON items USING GIN(title gin_trgm_ops);
 CREATE TABLE IF NOT EXISTS ingest_runs (
   id BIGSERIAL PRIMARY KEY,
@@ -50,7 +52,7 @@ CREATE TABLE IF NOT EXISTS ingest_runs (
 );
 CREATE TABLE IF NOT EXISTS project_rules (
   id BIGSERIAL PRIMARY KEY,
-  project TEXT NOT NULL,
+  project TEXT NOT NULL UNIQUE,
   keywords JSONB NOT NULL,
   priority INTEGER NOT NULL DEFAULT 0
 );
@@ -78,18 +80,34 @@ class Repository:
           metadata=EXCLUDED.metadata, updated_at=now()
         RETURNING id
         """
+        values = (
+            item.source_type,
+            item.source_id,
+            item.locator,
+            item.title,
+            item.body,
+            item.content_hash,
+            item.project,
+            json.dumps(metadata or {}),
+        )
         with self.connect() as conn:
-            row = conn.execute(sql, (
-                item.source_type, item.source_id, item.locator, item.title, item.body,
-                item.content_hash, item.project, json.dumps(metadata or {}),
-            )).fetchone()
+            row = conn.execute(sql, values).fetchone()
             assert row is not None
             return int(row["id"])
 
-    def search(self, query: str, source: str | None = None, project: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        source: str | None = None,
+        project: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
         sql = """
         SELECT id, source_type, source_id, locator, title, project, content_hash,
-               ts_rank(to_tsvector('simple', title || ' ' || body), plainto_tsquery('simple', %s)) AS rank
+               ts_rank(
+                 to_tsvector('simple', title || ' ' || body),
+                 plainto_tsquery('simple', %s)
+               ) AS rank
         FROM items
         WHERE (to_tsvector('simple', title || ' ' || body) @@ plainto_tsquery('simple', %s)
                OR similarity(title, %s) > 0.2
@@ -100,8 +118,20 @@ class Repository:
         ORDER BY rank DESC, updated_at DESC
         LIMIT %s
         """
+        params = (
+            query,
+            query,
+            query,
+            query,
+            query,
+            source,
+            source,
+            project,
+            project,
+            limit,
+        )
         with self.connect() as conn:
-            return list(conn.execute(sql, (query, query, query, query, query, source, source, project, project, limit)).fetchall())
+            return list(conn.execute(sql, params).fetchall())
 
     def get_item(self, item_id: int) -> dict[str, Any] | None:
         with self.connect() as conn:
@@ -109,7 +139,76 @@ class Repository:
 
     def duplicates(self) -> list[dict[str, Any]]:
         with self.connect() as conn:
-            return list(conn.execute("""
-              SELECT content_hash, count(*) AS count, array_agg(id ORDER BY id) AS item_ids
-              FROM items GROUP BY content_hash HAVING count(*) > 1 ORDER BY count(*) DESC
-            """).fetchall())
+            return list(
+                conn.execute(
+                    """
+                    SELECT content_hash, count(*) AS count, array_agg(id ORDER BY id) AS item_ids
+                    FROM items
+                    GROUP BY content_hash
+                    HAVING count(*) > 1
+                    ORDER BY count(*) DESC
+                    """
+                ).fetchall()
+            )
+
+    def save_source_state(
+        self,
+        source_type: str,
+        source_key: str,
+        locator: str,
+        state: dict[str, Any],
+    ) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO sources(source_type, source_key, locator, sync_state)
+                VALUES (%s,%s,%s,%s::jsonb)
+                ON CONFLICT(source_key) DO UPDATE SET
+                  source_type=EXCLUDED.source_type,
+                  locator=EXCLUDED.locator,
+                  sync_state=EXCLUDED.sync_state,
+                  updated_at=now()
+                """,
+                (source_type, source_key, locator, json.dumps(state)),
+            )
+
+    def get_source_state(self, source_key: str) -> dict[str, Any]:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT sync_state FROM sources WHERE source_key=%s", (source_key,)
+            ).fetchone()
+        if row is None:
+            return {}
+        value = row["sync_state"]
+        return dict(value) if isinstance(value, dict) else {}
+
+    def save_project_rule(self, rule: ProjectRule) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO project_rules(project, keywords, priority)
+                VALUES (%s,%s::jsonb,%s)
+                ON CONFLICT(project) DO UPDATE SET
+                  keywords=EXCLUDED.keywords,
+                  priority=EXCLUDED.priority
+                """,
+                (rule.project, json.dumps(list(rule.keywords)), rule.priority),
+            )
+
+    def list_project_rules(self) -> list[ProjectRule]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT project, keywords, priority FROM project_rules ORDER BY priority DESC, project"
+            ).fetchall()
+        rules: list[ProjectRule] = []
+        for row in rows:
+            raw_keywords = row["keywords"]
+            keywords = tuple(str(value) for value in raw_keywords) if isinstance(raw_keywords, list) else ()
+            rules.append(
+                ProjectRule(
+                    project=str(row["project"]),
+                    keywords=keywords,
+                    priority=int(row["priority"]),
+                )
+            )
+        return rules

@@ -1,0 +1,26 @@
+name: personal-data-os-ci
+on:
+  pull_request:
+    paths:
+      - 'personal-data-os-v0.1.0/**'
+      - '.github/workflows/personal-data-os-ci.yml'
+  push:
+    branches: ['feat/personal-data-os-v0.1.0']
+    paths:
+      - 'personal-data-os-v0.1.0/**'
+      - '.github/workflows/personal-data-os-ci.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: personal-data-os-v0.1.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[dev]'
+      - run: ruff check .
+      - run: mypy app
+      - run: pytest -q --cov=app --cov-report=term-missing

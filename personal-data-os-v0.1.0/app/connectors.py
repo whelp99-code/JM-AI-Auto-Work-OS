@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -50,6 +51,61 @@ class GmailConnector:
                 page_token = payload.get("nextPageToken")
                 if not page_token:
                     break
+        finally:
+            if own:
+                client.close()
+
+
+@dataclass
+class GoogleCalendarConnector:
+    access_token: str
+    base_url: str = "https://www.googleapis.com/calendar/v3"
+
+    def sync_events(
+        self,
+        calendar_id: str = "primary",
+        sync_token: str | None = None,
+        client: httpx.Client | None = None,
+    ) -> tuple[list[Item], str | None]:
+        own = client is None
+        client = client or httpx.Client(timeout=30)
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        base = f"{self.base_url}/calendars/{quote(calendar_id, safe='')}/events"
+        page_token: str | None = None
+        next_sync_token: str | None = None
+        items: list[Item] = []
+        try:
+            while True:
+                params: dict[str, Any] = {"maxResults": 2500}
+                if sync_token:
+                    params["syncToken"] = sync_token
+                if page_token:
+                    params["pageToken"] = page_token
+                response = client.get(base, headers=headers, params=params)
+                response.raise_for_status()
+                payload = response.json()
+                for event in payload.get("items", []):
+                    if event.get("status") == "cancelled":
+                        continue
+                    event_id = str(event.get("id", ""))
+                    description = str(event.get("description", ""))
+                    location = str(event.get("location", ""))
+                    body = "\n".join(part for part in (description, location) if part)
+                    items.append(
+                        Item(
+                            "google-calendar",
+                            event_id,
+                            f"gcal://{calendar_id}/event/{event_id}",
+                            str(event.get("summary", "")),
+                            body,
+                        )
+                    )
+                page_token = payload.get("nextPageToken")
+                if page_token:
+                    continue
+                next_sync_token = payload.get("nextSyncToken")
+                break
+            return items, next_sync_token
         finally:
             if own:
                 client.close()

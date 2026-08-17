@@ -102,34 +102,34 @@ class Repository:
         project: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        sql = """
+        clauses = [
+            """(
+              to_tsvector('simple', title || ' ' || body) @@ plainto_tsquery('simple', %s)
+              OR similarity(title, %s) > 0.2
+              OR title ILIKE '%%' || %s || '%%'
+              OR body ILIKE '%%' || %s || '%%'
+            )"""
+        ]
+        params: list[Any] = [query, query, query, query]
+        if source is not None:
+            clauses.append("source_type=%s")
+            params.append(source)
+        if project is not None:
+            clauses.append("project=%s")
+            params.append(project)
+        params.append(limit)
+        sql = f"""
         SELECT id, source_type, source_id, locator, title, project, content_hash,
                ts_rank(
                  to_tsvector('simple', title || ' ' || body),
                  plainto_tsquery('simple', %s)
                ) AS rank
         FROM items
-        WHERE (to_tsvector('simple', title || ' ' || body) @@ plainto_tsquery('simple', %s)
-               OR similarity(title, %s) > 0.2
-               OR title ILIKE '%%' || %s || '%%'
-               OR body ILIKE '%%' || %s || '%%')
-          AND (%s IS NULL OR source_type=%s)
-          AND (%s IS NULL OR project=%s)
+        WHERE {' AND '.join(clauses)}
         ORDER BY rank DESC, updated_at DESC
         LIMIT %s
         """
-        params = (
-            query,
-            query,
-            query,
-            query,
-            query,
-            source,
-            source,
-            project,
-            project,
-            limit,
-        )
+        params.insert(0, query)
         with self.connect() as conn:
             return list(conn.execute(sql, params).fetchall())
 
@@ -203,7 +203,11 @@ class Repository:
         rules: list[ProjectRule] = []
         for row in rows:
             raw_keywords = row["keywords"]
-            keywords = tuple(str(value) for value in raw_keywords) if isinstance(raw_keywords, list) else ()
+            keywords = (
+                tuple(str(value) for value in raw_keywords)
+                if isinstance(raw_keywords, list)
+                else ()
+            )
             rules.append(
                 ProjectRule(
                     project=str(row["project"]),

@@ -14,9 +14,12 @@ class Item:
     title: str
     body: str
     project: str = "unclassified"
+    raw_hash: str | None = None
 
     @property
     def content_hash(self) -> str:
+        if self.raw_hash:
+            return self.raw_hash
         return sha256(self.body.encode("utf-8", errors="replace")).hexdigest()
 
 
@@ -44,6 +47,14 @@ def ensure_within_root(root: Path, candidate: Path) -> Path:
     if resolved_candidate != resolved_root and resolved_root not in resolved_candidate.parents:
         raise ValueError("path escapes configured root")
     return resolved_candidate
+
+
+def hash_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(chunk_size):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def read_text_bounded(path: Path, max_bytes: int = 2_000_000) -> str:

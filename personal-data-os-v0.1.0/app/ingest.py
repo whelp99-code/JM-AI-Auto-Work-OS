@@ -4,7 +4,7 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
-from app.core import Item, ensure_within_root, read_text_bounded
+from app.core import Item, ensure_within_root, hash_file, read_text_bounded
 
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".csv", ".html", ".htm"}
 
@@ -12,11 +12,15 @@ TEXT_EXTENSIONS = {".txt", ".md", ".json", ".csv", ".html", ".htm"}
 def scan_files(root: Path) -> Iterable[Item]:
     resolved_root = root.resolve(strict=True)
     for candidate in resolved_root.rglob("*"):
-        if not candidate.is_file() or candidate.suffix.lower() not in TEXT_EXTENSIONS:
+        try:
+            safe = ensure_within_root(resolved_root, candidate)
+        except (OSError, ValueError):
             continue
-        safe = ensure_within_root(resolved_root, candidate)
+        if not safe.is_file() or safe.suffix.lower() not in TEXT_EXTENSIONS:
+            continue
         try:
             body = read_text_bounded(safe)
+            raw_hash = hash_file(safe)
         except (OSError, ValueError):
             continue
         yield Item(
@@ -25,6 +29,7 @@ def scan_files(root: Path) -> Iterable[Item]:
             locator=str(safe),
             title=safe.name,
             body=body,
+            raw_hash=raw_hash,
         )
 
 

@@ -12,6 +12,22 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: jm_data_os
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d jm_data_os"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/jm_data_os
     defaults:
       run:
         working-directory: personal-data-os-v0.1.0
@@ -24,3 +40,14 @@ jobs:
       - run: ruff check .
       - run: mypy app
       - run: pytest -q --cov=app --cov-report=term-missing
+      - name: Backup and restore proof
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+          before="$(psql "$DATABASE_URL" -Atc 'select count(*) from items')"
+          dump="$(bash scripts/backup.sh /tmp/jm-data-os-backups)"
+          psql 'postgresql://postgres:postgres@127.0.0.1:5432/postgres' -c 'DROP DATABASE jm_data_os WITH (FORCE);'
+          psql 'postgresql://postgres:postgres@127.0.0.1:5432/postgres' -c 'CREATE DATABASE jm_data_os;'
+          bash scripts/restore.sh "$dump"
+          after="$(psql "$DATABASE_URL" -Atc 'select count(*) from items')"
+          test "$before" = "$after"
